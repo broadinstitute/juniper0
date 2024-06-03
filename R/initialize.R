@@ -69,13 +69,13 @@ initialize <- function(
   ## Data Processing
 
   # Load the reference sequence
-  ref_genome <- read.FASTA("./input_data/ref.fasta")
+  ref_genome <- ape::read.FASTA("./input_data/ref.fasta")
 
   # Length of genome
   n_bases <- length(ref_genome[[1]])
 
   # Load the FASTA of sequences
-  fasta <- read.FASTA("./input_data/aligned.fasta")
+  fasta <- ape::read.FASTA("./input_data/aligned.fasta")
 
   # The first genome is itself the ref genome
   fasta <- c(ref_genome, fasta)

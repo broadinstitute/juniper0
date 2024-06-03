@@ -712,17 +712,17 @@ plot_current <- function(h, n_obs){
   vertices <- data.frame(name = 1:n)
   edges <- as.data.frame(cbind(paste(h[2:n]), paste(2:n)))
   colnames(edges) <- c('from', 'to')
-  g <- graph_from_data_frame(edges)
+  g <- igraph::graph_from_data_frame(edges)
   colors <- rep('black', n)
   colors[1:n > n_obs] <- 'gray'
-  p <- ggraph(edges, layout = 'dendrogram', circular = T) +
-    geom_edge_elbow() +
-    geom_node_point(aes(color = as.numeric(name) > n_obs), size = 5) +
-    geom_node_text(aes(label=name), size=2.5, color = 'white') +
-    scale_color_manual(values = c("black", "gray")) +
-    theme_graph() +
-    coord_fixed() +
-    theme(legend.position = 'none')
+  p <- ggraph::ggraph(edges, layout = 'dendrogram', circular = T) +
+    ggraph::geom_edge_elbow() +
+    ggraph::geom_node_point(aes(color = as.numeric(name) > n_obs), size = 5) +
+    ggraph::geom_node_text(aes(label=name), size=2.5, color = 'white') +
+    ggraph::scale_color_manual(values = c("black", "gray")) +
+    ggraph::theme_graph() +
+    ggraph::coord_fixed() +
+    ggraph::theme(legend.position = 'none')
   p
 }
 
