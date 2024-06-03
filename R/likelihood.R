@@ -72,7 +72,17 @@ g_lik <- function(mcmc, data, i){
     delta_t <- mcmc$t[i] - g
 
     # If i unobserved, or has no iSNV info provided, simply evolve from end of growth phase in h[i] to end of growth phase in i
-    if(i > data$n_obs | !data$vcf_present[i]){
+    isnv_info <- TRUE
+    if(i > data$n_obs){
+      isnv_info <- FALSE
+    }
+    if(i <= data$n_obs){
+      if(!data$vcf_present[i]){
+        isnv_info <- FALSE
+      }
+    }
+
+    if(!isnv_info){
       delta_t <- mcmc$t[i] - mcmc$t[mcmc$h[i]]
     }
 
@@ -105,10 +115,10 @@ g_lik <- function(mcmc, data, i){
         #length(data$filters$common)
 
       # Likelihood from x = 0, y = 0 or x = 1, y = 1
-      out <- no_mut * (log(1/4 + (3/4)*exp(-(4*mcmc$mu/3) * delta_t)) + ifelse(i<= data$n_obs & data$vcf_present[i], log_p_no_isnv, 0)) +
+      out <- no_mut * (log(1/4 + (3/4)*exp(-(4*mcmc$mu/3) * delta_t)) + ifelse(isnv_info, log_p_no_isnv, 0)) +
 
         # Likelihood from x = 0, y = 1 and x = 1, y = 0
-        (length(mcmc$m01[[i]]) + length(mcmc$m10[[i]])) * (log(1/4 - (1/4)*exp(-(4*mcmc$mu/3) * delta_t)) + ifelse(i<= data$n_obs & data$vcf_present[i], log_p_no_isnv, 0))
+        (length(mcmc$m01[[i]]) + length(mcmc$m10[[i]])) * (log(1/4 - (1/4)*exp(-(4*mcmc$mu/3) * delta_t)) + ifelse(isnv_info, log_p_no_isnv, 0))
 
       if(i <= data$n_obs){
         if(length(data$snvs[[i]]$isnv) > 0){
@@ -163,13 +173,13 @@ g_lik <- function(mcmc, data, i){
 
           out <- out +
             # Likelihood from 0 < x < 1, y = 0
-            length(mcmc$mx0[[i]]) * ifelse(i<= data$n_obs & data$vcf_present[i], log_p_no_isnv, 0) +
+            length(mcmc$mx0[[i]]) * ifelse(isnv_info, log_p_no_isnv, 0) +
             sum(log(
               (1/4 + (3/4)*exp(-(4*mcmc$mu/3) * delta_t_prime))*(1 - freq_x0_anc) + (1/4 - (1/4)*exp(-(4*mcmc$mu/3) * delta_t_prime))*freq_x0_anc
             )) + sum(log(1 - (mcmc$b^(mcmc$w[i] + 1) * 2 * freq_x0_anc * (1 - freq_x0_anc) / 3^mcmc$w[i]))) + # probability we don't transmit successive split bottlenecks
 
             # Likelihood from 0 < x < 1, y = 1
-            length(mcmc$mx1[[i]]) * ifelse(i<= data$n_obs & data$vcf_present[i], log_p_no_isnv, 0) +
+            length(mcmc$mx1[[i]]) * ifelse(isnv_info, log_p_no_isnv, 0) +
             sum(log(
               (1/4 + (3/4)*exp(-(4*mcmc$mu/3) * delta_t_prime))*(freq_x1_anc) + (1/4 - (1/4)*exp(-(4*mcmc$mu/3) * delta_t_prime))*(1 - freq_x1_anc)
             )) + sum(log(1 - (mcmc$b^(mcmc$w[i] + 1) * 2 * freq_x1_anc * (1 - freq_x1_anc) / 3^mcmc$w[i]))) # probability we don't transmit successive split bottlenecks
