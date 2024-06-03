@@ -721,10 +721,10 @@ plot_current <- function(mcmc, data){
     ggraph::geom_edge_elbow() +
     ggraph::geom_node_point(aes(color = as.numeric(name) > n_obs), size = 5) +
     ggraph::geom_node_text(aes(label=name), size=2.5, color = 'white') +
-    ggraph::scale_color_manual(values = c("black", "gray")) +
+    ggplot2::scale_color_manual(values = c("black", "gray")) +
     ggraph::theme_graph() +
-    ggraph::coord_fixed() +
-    ggraph::theme(legend.position = 'none')
+    ggplot2::coord_fixed() +
+    ggplot2::theme(legend.position = 'none')
   p
 }
 
