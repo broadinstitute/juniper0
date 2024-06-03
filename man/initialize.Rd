@@ -28,9 +28,9 @@ initialize(
 \arguments{
 \item{n_subtrees}{How many subtrees to parallelize over. Defaults to NULL, in which case it's the number of cores available to the machine, so long as each subtree has at least 25 nodes.}
 
-\item{n_global}{Number of global iterations.}
+\item{n_global}{Number of global iterations. Defaults to 100.}
 
-\item{n_local}{Number of local iterations per global iteration.}
+\item{n_local}{Number of local iterations per global iteration. Defaults to 100.}
 
 \item{sample_every}{Number of local iterations per one sample. Must divide n_local.}
 

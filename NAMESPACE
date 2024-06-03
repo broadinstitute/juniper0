@@ -2,3 +2,4 @@
 
 export(initialize)
 export(run_mcmc)
+export(summarize)

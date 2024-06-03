@@ -20,28 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-### Execute large-scale outbreak reconstruction algorithm
-#set.seed(232)
-## Libraries
-# library(ape)
-# #library(Rcpp)
-# library(ggplot2)
-# library(igraph)
-# library(ggraph)
-# #library(cowplot)
-# #library(parallel)
-
-# source("likelihood.R")
-# source("moves.R")
-# source("prior.R")
-# source("subroutines.R")
-# source("initialize.R")
-# source("global_mcmc.R")
-# source("local_mcmc.R")
-
-### M-H algo
-
-
 #' Run Outbreak Reconstruction
 #'
 #' This function runs the outbreak reconstruction algo.
