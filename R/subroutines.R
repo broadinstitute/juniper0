@@ -707,7 +707,9 @@ chop <- function(mcmc, data){
 
 
 ## Plot current ancestry
-plot_current <- function(h, n_obs){
+plot_current <- function(mcmc, data){
+  h <- mcmc$h
+  n_obs <- data$n_obs
   n <- length(h)
   vertices <- data.frame(name = 1:n)
   edges <- as.data.frame(cbind(paste(h[2:n]), paste(2:n)))

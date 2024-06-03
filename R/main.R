@@ -110,13 +110,17 @@ run_mcmc <- function(init, noisy = F){
 
     if(noisy){
       message(paste(r, "global iterations complete. Log-likelihood =", round(liks[r], 2)))
-      print(plot_current(mcmc$h, data$n_obs))
-      print(mcmc$w)
-       print(mcmc$mu)
-       print(mcmc$p)
-       print(mcmc$a_g)
-       print(mcmc$rho * (1-mcmc$psi) / mcmc$psi)
-       print(mcmc$prior)
+      print(plot_current(mcmc, data))
+      #print(mcmc$w)
+       print(
+         paste0(
+           "Mutation rate: ",
+           signif(mcmc$mu, digits = 4),
+           " subs/site/day, ",
+           signif(mcmc$p, digits = 4),
+           " subs/site/cycle"
+         )
+       )
        #print(mcmc$rho * (1 - mcmc$psi) / mcmc$psi)
       # print(length(unlist(mcmc$m01)) + length(unlist(mcmc$m10)))
       # print(length(unlist(mcmc$mx1)))
