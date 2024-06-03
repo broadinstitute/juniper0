@@ -623,6 +623,19 @@ bfs <- function(i, h){
   return(out)
 }
 
+# DFS traversal of tree, lowest number first
+dfs <- function(h){
+  stack <- 1
+  explored <- c()
+  while (length(stack) > 0) {
+    who <- sort(which(h == stack[1]))
+    explored <- c(explored, stack[1])
+    stack <- stack[-1]
+    stack <- c(who, stack)
+  }
+  return(explored)
+}
+
 # Get generation of each node
 gen2 <- function(mcmc){
   ord <- bfs(1,mcmc$h)
@@ -707,25 +720,80 @@ chop <- function(mcmc, data){
 
 
 ## Plot current ancestry
-plot_current <- function(mcmc, data){
-  h <- mcmc$h
-  n_obs <- data$n_obs
-  n <- length(h)
-  vertices <- data.frame(name = 1:n)
-  edges <- as.data.frame(cbind(paste(h[2:n]), paste(2:n)))
-  colnames(edges) <- c('from', 'to')
-  g <- igraph::graph_from_data_frame(edges)
-  colors <- rep('black', n)
-  colors[1:n > n_obs] <- 'gray'
-  p <- ggraph::ggraph(edges, layout = 'dendrogram', circular = T) +
-    ggraph::geom_edge_elbow() +
-    ggraph::geom_node_point(aes(color = as.numeric(name) > n_obs), size = 5) +
-    ggraph::geom_node_text(aes(label=name), size=2.5, color = 'white') +
-    ggplot2::scale_color_manual(values = c("black", "gray")) +
-    ggraph::theme_graph() +
-    ggplot2::coord_fixed() +
-    ggplot2::theme(legend.position = 'none')
-  p
+plot_current <- function(mcmc, data, type = "standard"){
+  if(type == "standard"){
+    # Phylo plot
+
+    h <- mcmc$h
+    t <- mcmc$t
+    ord <- rev(dfs(h))
+
+    leaves <- which(!(1:mcmc$n %in% mcmc$h))
+    n_leaves <- length(leaves)
+
+    # Angle of each node
+    thetas <- c()
+    leaf_count <- 0
+
+    for (i in ord) {
+      if(!(i %in% leaves)){
+        kids <- which(h == i)
+        thetas[i] <- mean(thetas[kids])
+      }else{
+        thetas[i] <- leaf_count * 2 * pi / n_leaves
+        leaf_count <- leaf_count + 1
+      }
+    }
+
+    df_standard <- data.frame(x =t, y = thetas)
+
+
+    # vertical segments
+    xs <- c()
+    ystart <- c()
+    yend <- c()
+    for (i in 1:mcmc$n) {
+      kids <- which(h == i)
+      if(length(kids) > 0){
+        xs <- c(xs, t[i])
+        ystart <- c(ystart, min(thetas[kids]))
+        yend <- c(yend, max(thetas[kids]))
+      }
+    }
+
+    big <- ggplot2::ggplot() +
+      ggplot2::geom_segment(mapping = ggplot2::aes(x = t[h], xend = t, y = thetas, yend = thetas), linewidth = 0.5) +
+      ggplot2::geom_segment(mapping = ggplot2::aes(x = xs, xend = xs, y = ystart, yend = yend), linewidth = 0.5) +
+      ggplot2::geom_point(mapping = ggplot2::aes(x = df_standard$x, y = df_standard$y), size = 1) +
+      ggplot2::xlab("Evolutionary Time (days)") +
+      ggplot2::scale_y_continuous(breaks = NULL) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        axis.title.y = ggplot2::element_blank(),
+        legend.position=c(0.85, 0.65)
+      )
+    big
+
+  }else if(type == "radial"){
+    h <- mcmc$h
+    n_obs <- data$n_obs
+    n <- length(h)
+    vertices <- data.frame(name = 1:n)
+    edges <- as.data.frame(cbind(paste(h[2:n]), paste(2:n)))
+    colnames(edges) <- c('from', 'to')
+    g <- igraph::graph_from_data_frame(edges)
+    colors <- rep('black', n)
+    colors[1:n > n_obs] <- 'gray'
+    p <- ggraph::ggraph(edges, layout = 'dendrogram', circular = T) +
+      ggraph::geom_edge_elbow() +
+      ggraph::geom_node_point(ggplot2::aes(color = as.numeric(name) > n_obs), size = 5) +
+      ggraph::geom_node_text(ggplot2::aes(label=name), size=2.5, color = 'white') +
+      ggplot2::scale_color_manual(values = c("black", "gray")) +
+      ggraph::theme_graph() +
+      ggplot2::coord_fixed() +
+      ggplot2::theme(legend.position = 'none')
+    p
+  }
 }
 
 ## Plot of nodes only, in radial visualization
