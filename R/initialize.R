@@ -29,7 +29,7 @@ initialize <- function(
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
     init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
     init_ancestry = FALSE, # Specify the starting ancestry
-    record = c("n", "h", "w", "t", "b", "a_g", "lambda_g", "a_s", "lambda_s", "mu", "p", "v", "lambda", "rho", "psi"), # Which aspects of mcmc do we want to record
+    record = c("n", "h", "w", "t", "b", "mu", "p"), # Which aspects of mcmc do we want to record
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
@@ -248,7 +248,7 @@ initialize <- function(
   for (i in 1:n) {
     mcmc$m01[[i]] <- snvs[[i]]$snv$call
     mcmc$m10[[i]] <- character(0)
-    mcmc$m0y[[i]] <- snvs[[i]]$isnv$call
+    mcmc$m0y[[i]] <- ifelse(is.null(snvs[[i]]$isnv$call), character(0), snvs[[i]]$isnv$call)
     mcmc$m1y[[i]] <- character(0)
     mcmc$mx0[[i]] <- character(0)
     mcmc$mx1[[i]] <- character(0)
