@@ -120,6 +120,7 @@ g_lik <- function(mcmc, data, i){
         # Likelihood from x = 0, y = 1 and x = 1, y = 0
         (length(mcmc$m01[[i]]) + length(mcmc$m10[[i]])) * (log(1/4 - (1/4)*exp(-(4*mcmc$mu/3) * delta_t)) + ifelse(isnv_info, log_p_no_isnv, 0))
 
+      # If there actually are any reported iSNVs...
       if(i <= data$n_obs){
         if(length(data$snvs[[i]]$isnv$call) > 0){
 
@@ -143,7 +144,7 @@ g_lik <- function(mcmc, data, i){
             ))
 
           if(mcmc$h[i] <= data$n_obs){
-            if(!is.null(data$snvs[[mcmc$h[i]]]$isnv)){
+            if(length(data$snvs[[mcmc$h[i]]]$isnv$call) > 0){
 
               # Frequency of shared iSNV in ancestor of case i
               freq_xy_anc <- data$snvs[[mcmc$h[i]]]$isnv$af[match(mcmc$mxy[[i]], data$snvs[[mcmc$h[i]]]$isnv$call)]
