@@ -20,35 +20,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Recursive form of epi likelihood
-coalescent <- function(mcmc, data){
-  gens <- gen(mcmc$h, mcmc$w)
-
-  G <- max(gens)
-  qs <- get_qs(mcmc$n - 1 + sum(mcmc$w), data$N, G, mcmc$rho, mcmc$psi)
-
-  out <- 0
-  for (i in 1:mcmc$n) {
-    out <- out + e_lik_node(mcmc$d[i], mcmc$w[i], qs[(gens[i] + 1 - mcmc$w[i]):(gens[i] + 1)], mcmc$rho, mcmc$psi)
-  }
-
-  out <- out - (mcmc$n - 1 + sum(mcmc$w))*log(data$N)
-  return(out)
-}
-
-
 # Compute epidemiological log likelihood
-
 e_lik <- function(mcmc, data){
 
   if(
-    any(mcmc$w < 0) |
-    mcmc$a_g < 0 |
-    mcmc$lambda_g < 0 |
-    mcmc$a_s < 0 |
-    mcmc$lambda_s < 0 |
-    mcmc$rho < 0 |
-    mcmc$psi < 0
+    any(mcmc$w < 0) #|
+    # mcmc$a_g < 0 |
+    # mcmc$lambda_g < 0 |
+    # mcmc$a_s < 0 |
+    # mcmc$lambda_s < 0 |
+    # mcmc$rho < 0 |
+    # mcmc$psi < 0
   ){
     return(-Inf)
   }else{
@@ -59,25 +41,12 @@ e_lik <- function(mcmc, data){
         # Sojourn intervals
         sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
 
-        # Varilly Coalescent
-        # sum(mcmc$d * log((1-mcmc$psi) / mcmc$psi) + lchoose(mcmc$d + mcmc$rho - 1, mcmc$d) - lchoose(data$N, mcmc$d)) +
-        # sum(mcmc$w) * (log(mcmc$rho) + log((1-mcmc$psi) / mcmc$psi) - log(data$N)) +
-        # lchoose(data$N, mcmc$n - data$n_obs + sum(mcmc$w)) + lfactorial(mcmc$n - data$n_obs + sum(mcmc$w))
-
-        sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi))
-
-        # ifelse(
-        #   data$disjoint_coalescent,
-        #   coalescent(mcmc, data),
-        #   sum(mcmc$d * log((1-mcmc$psi) / mcmc$psi) + lchoose(mcmc$d + mcmc$rho - 1, mcmc$d) - lchoose(data$N, mcmc$d)) +
-        #   sum(mcmc$w) * (log(mcmc$rho) + log((1-mcmc$psi) / mcmc$psi) - log(data$N))
-        # ) +
-        #
-        # ifelse(
-        #   data$pooled_coalescent,
-        #   lchoose(data$N, mcmc$n - data$n_obs + sum(mcmc$w)) + lfactorial(mcmc$n - data$n_obs + sum(mcmc$w)),
-        #   0
-        # )
+        # xi-coalescent
+        ifelse(
+          mcmc$rho != Inf,
+          sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
+          (sum(mcmc$d) + sum(mcmc$w)) * log(data$R)
+        )
     )
   }
 }

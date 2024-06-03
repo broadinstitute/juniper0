@@ -27,7 +27,7 @@ global_mcmc <- function(mcmc, data){
   # Move 1
   mcmc <- moves$b(mcmc, data)
 
-  mcmc <- moves$a_g(mcmc, data)
+  #mcmc <- moves$a_g(mcmc, data)
 
   # Move 6
   mcmc <- moves$mu(mcmc, data)

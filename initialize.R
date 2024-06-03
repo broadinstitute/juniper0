@@ -6,15 +6,28 @@ initialize <- function(
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
     init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large
     init_ancestry = FALSE, # Specify the starting ancestry
-    pooled_coalescent = TRUE, # TRUE means intermediate hosts aren't labeled
-    disjoint_coalescent = TRUE, # Are we using the disjoint (non-overlapping) coalescent?
     record = c("n", "h", "w", "t", "b", "a_g", "lambda_g", "a_s", "lambda_s", "mu", "p", "v", "lambda", "rho", "psi"), # Which aspects of mcmc do we want to record
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
-    growth = 0, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
-    virus = "SARS-CoV-2" # Pathogen being studied
+    virus = "SARS-CoV-2", # Pathogen being studied
+    a_g = 5, # Shape parameter, generation interval
+    lambda_g = 1, # Rate parameter, generation interval
+    a_s = 5, # Shape parameter, sojourn interval
+    lambda_s = 1, # Rate parameter, sojourn interval
+    rho = Inf, # Overdispersion parameter (Inf indicates Poisson distribution)
+    R = 1, # Reproductive number (average over entire outbreak)
+    growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+
 ){
+
+  if((!is.null(R) & !is.null(growth)) | (is.null(R) & is.null(growth))){
+    stop("Exactly one of the inputs R and growth may be specified. The other must be set to NULL.")
+  }else if(!is.null(R)){
+    growth <- log(R) / (a_g / lambda_g)
+  }else if(!is.null(growth)){
+    R <- exp(growth * a_g / lambda_g)
+  }
 
   ## Filters
   if(is.null(filters)){
@@ -178,8 +191,6 @@ initialize <- function(
   data$eps <- 0.005 # Explore/exploit tradeoff for genotypes of new nodes
   data$p_move <- 0.6
   data$tau = 0.2
-  data$pooled_coalescent <- pooled_coalescent
-  data$disjoint_coalescent <- disjoint_coalescent # Are we using the disjoint (non-overlapping) coalescent?
   #data$n_cores <-
   # Number of subtrees to chop into is n_cores, as long as each subtree has at least 100 people
   data$n_subtrees <- n_subtrees
@@ -191,6 +202,11 @@ initialize <- function(
   data$filters <- filters
   data$virus <- virus
   data$growth <- growth
+  data$R <- R
+
+  # Old feature from previous version
+  data$pooled_coalescent = T
+  data$disjoint_coalescent = F
 
   mcmc <- list()
   mcmc$n <- n # number of tracked hosts
@@ -256,10 +272,10 @@ initialize <- function(
   }
 
   mcmc$b <- 0.05 # Probability bottleneck has size >1
-  mcmc$a_g <- 5 # shape parameter of the generation interval
-  mcmc$lambda_g <- 1 # rate parameter of the generation interval. FOR NOW: fixing at 1.
-  mcmc$a_s <- 5 # shape parameter of the sojourn interval
-  mcmc$lambda_s <- 1 # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
+  mcmc$a_g <- a_g # shape parameter of the generation interval
+  mcmc$lambda_g <- lambda_g # rate parameter of the generation interval. FOR NOW: fixing at 1.
+  mcmc$a_s <- a_s # shape parameter of the sojourn interval
+  mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   if(virus == "SARS-CoV-2"){
     mcmc$mu <- 1e-6 # mutation rate, sites/day
     mcmc$p <- 1e-6 # mutation rate, sites/cycle
@@ -269,11 +285,11 @@ initialize <- function(
   }
   mcmc$v <- 1000 # burst size
   mcmc$lambda <- 1 # expo growth rate of bursts
-  mcmc$rho <- 0.1 # first parameter, NBin offspring distribution (overdispersion param)
+  mcmc$rho <- rho # first parameter, NBin offspring distribution (overdispersion param)
 
   # Mean number of cases at time t is R^(t/g) = exp(t * log(R) / g), g mean generation interval
   # growth = log(R) / g => R = exp(g * growth)
-  mcmc$psi <- mcmc$rho / (exp((mcmc$a_g / mcmc$lambda_g) * data$growth) + mcmc$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
+  mcmc$psi <- mcmc$rho / (data$R + mcmc$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
 
   mcmc$w <- round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g)))
   mcmc$w[1] <- 0

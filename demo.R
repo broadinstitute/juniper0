@@ -6,11 +6,10 @@ source("main.R")
 
 init <- initialize(
   init_mst = T,
-  pooled_coalescent = T,
-  disjoint_coalescent = F,
   n_global = 100,
   n_subtrees = 1,
-  virus = "H5N1"
+  virus = "H5N1" #,
+  #rho = 0.1
 )
 
 mcmc <- init[[1]]
