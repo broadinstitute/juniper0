@@ -126,6 +126,7 @@ initialize <- function(
   snvs <- list()
   pb = txtProgressBar(min = 0, max = n, initial = 0)
   if(check_names){
+    vcf_present <- c()
     for (i in 1:n) {
       # Check if we have a VCF file
       included <- grepl(names[i], vcfs)
@@ -134,21 +135,26 @@ initialize <- function(
       }else if(sum(included) == 1){
         vcf <- read.table(paste0("./input_data/vcf/", vcfs[included]))
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+        vcf_present[i] <- TRUE
       }else{
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
+        vcf_present[i] <- FALSE
       }
       setTxtProgressBar(pb,i)
     }
   }else{
     vcfs_prefix <- gsub(".vcf", "", vcfs)
+    vcf_present <- c()
     for (i in 1:n) {
       # Locate the correct vcf file
       who <- which(vcfs_prefix == names[i])
       if(length(who) == 1){
         vcf <- read.table(paste0("./input_data/vcf/", vcfs[who]))
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+        vcf_present[i] <- TRUE
       }else{
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
+        vcf_present[i] <- FALSE
       }
       setTxtProgressBar(pb,i)
     }
@@ -225,6 +231,7 @@ initialize <- function(
   data$virus <- virus
   data$growth <- growth
   data$R <- R
+  data$vcf_present <- vcf_present
 
   # Old feature from previous version
   data$pooled_coalescent = T
