@@ -121,7 +121,7 @@ g_lik <- function(mcmc, data, i){
         (length(mcmc$m01[[i]]) + length(mcmc$m10[[i]])) * (log(1/4 - (1/4)*exp(-(4*mcmc$mu/3) * delta_t)) + ifelse(isnv_info, log_p_no_isnv, 0))
 
       if(i <= data$n_obs){
-        if(length(data$snvs[[i]]$isnv) > 0){
+        if(length(data$snvs[[i]]$isnv$call) > 0){
 
           # Frequencies of added iSNVs
           freq_0y <- data$snvs[[i]]$isnv$af[match(mcmc$m0y[[i]], data$snvs[[i]]$isnv$call)]
@@ -165,7 +165,7 @@ g_lik <- function(mcmc, data, i){
       }
 
       if(mcmc$h[i] <= data$n_obs){
-        if(length(data$snvs[[mcmc$h[i]]]$isnv) > 0){
+        if(length(data$snvs[[mcmc$h[i]]]$isnv$call) > 0){
 
           # Frequency of iSNV in ancestor of case i
           freq_x0_anc <- data$snvs[[mcmc$h[i]]]$isnv$af[match(mcmc$mx0[[i]], data$snvs[[mcmc$h[i]]]$isnv$call)]

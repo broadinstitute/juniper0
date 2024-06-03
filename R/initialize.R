@@ -43,6 +43,25 @@ initialize <- function(
     growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
 ){
 
+  # n_subtrees = NULL
+  # n_global = 100 # Number of global moves
+  # n_local = 100 # Number of local moves per global move
+  # sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
+  # init_mst = FALSE # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
+  # init_ancestry = FALSE # Specify the starting ancestry
+  # record = c("n", "h", "w", "t", "b", "mu", "p") # Which aspects of mcmc do we want to record
+  # filters = NULL
+  # check_names = TRUE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
+  # # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
+  # virus = "SARS-CoV-2" # Pathogen being studied
+  # a_g = 5 # Shape parameter, generation interval
+  # lambda_g = 1 # Rate parameter, generation interval
+  # a_s = 5 # Shape parameter, sojourn interval
+  # lambda_s = 1 # Rate parameter, sojourn interval
+  # rho = Inf # Overdispersion parameter (Inf indicates Poisson distribution)
+  # R = 1 # Reproductive number (average over entire outbreak)
+  # growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+
   if((!is.null(R) & !is.null(growth)) | (is.null(R) & is.null(growth))){
     stop("Exactly one of the inputs R and growth may be specified. The other must be set to NULL.")
   }else if(!is.null(R)){
