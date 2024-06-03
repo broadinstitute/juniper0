@@ -762,7 +762,7 @@ plot_current <- function(mcmc, data, type = "standard"){
     }
 
     big <- ggplot2::ggplot() +
-      ggplot2::geom_segment(mapping = ggplot2::aes(x = t[h], xend = t, y = thetas, yend = thetas), linewidth = 0.5) +
+      ggplot2::geom_segment(mapping = ggplot2::aes(x = (t[h])[-1], xend = t[-1], y = thetas[-1], yend = thetas[-1]), linewidth = 0.5) +
       ggplot2::geom_segment(mapping = ggplot2::aes(x = xs, xend = xs, y = ystart, yend = yend), linewidth = 0.5) +
       ggplot2::geom_point(mapping = ggplot2::aes(x = df_standard$x, y = df_standard$y), size = 1) +
       ggplot2::xlab("Evolutionary Time (days)") +
