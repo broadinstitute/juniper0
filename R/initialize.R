@@ -3,8 +3,8 @@
 #' This function initializes the outbreak reconstruction algo.
 #'
 #' @param n_subtrees How many subtrees to parallelize over. Defaults to NULL, in which case it's the number of cores available to the machine, so long as each subtree has at least 25 nodes.
-#' @param n_global Number of global iterations.
-#' @param n_local Number of local iterations per global iteration.
+#' @param n_global Number of global iterations. Defaults to 100.
+#' @param n_local Number of local iterations per global iteration. Defaults to 100.
 #' @param sample_every Number of local iterations per one sample. Must divide n_local.
 #' @param name description
 #' @param init_mst Should we initialize to a minimum spanning tree? (Set to FALSE for large datasets due to long runtime.)
