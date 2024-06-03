@@ -1,0 +1,291 @@
+# Initialize mcmc (current state of the markov chain) and data
+initialize <- function(
+    n_subtrees = NULL,
+    n_global = 100, # Number of global moves
+    n_local = 100, # Number of local moves per global move
+    sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
+    init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large
+    init_ancestry = FALSE, # Specify the starting ancestry
+    pooled_coalescent = TRUE, # TRUE means intermediate hosts aren't labeled
+    disjoint_coalescent = TRUE, # Are we using the disjoint (non-overlapping) coalescent?
+    record = c("n", "h", "w", "t", "b", "a_g", "lambda_g", "a_s", "lambda_s", "mu", "p", "v", "lambda", "rho", "psi"), # Which aspects of mcmc do we want to record
+    filters = NULL,
+    check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
+    # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
+    growth = 0, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+    virus = "SARS-CoV-2" # Pathogen being studied
+){
+
+  ## Filters
+  if(is.null(filters)){
+    filters <- list(
+      af = 0.03,
+      dp = 100,
+      sb = 10
+    )
+    if(file.exists("./input_data/problematic.csv")){
+      filters$common <- read.csv("./input_data/problematic.csv")[,1]
+    }else{
+      filters$common <- integer(0)
+    }
+  }
+
+
+  ## Data Processing
+
+  # Load the reference sequence
+  ref_genome <- read.FASTA("./input_data/ref.fasta")
+
+  # Length of genome
+  n_bases <- length(ref_genome[[1]])
+
+  # Load the FASTA of sequences
+  fasta <- read.FASTA("./input_data/aligned.fasta")
+
+  # The first genome is itself the ref genome
+  fasta <- c(ref_genome, fasta)
+
+  # Number of samples
+  n <- length(fasta)
+
+  if(is.null(n_subtrees)){
+    n_subtrees <- max(min(parallel::detectCores(), floor(n / 25)), 1) # Minimum 25 nodes per subtree
+  }
+
+  # Prevent MST initialization when dataset is large
+  if(init_mst & n > 1000){
+    stop("Dataset is too large to use init_mst = TRUE. Specify a strating configuration by using init_ancestry, or initialize to a star-shaped configuration by setting init_mst = FALSE.")
+  }
+
+  # Names of sequences
+  names <- names(fasta)
+
+  # VCF files present
+  vcfs <- list.files("./input_data/vcf/")
+
+  # Date
+  date <- read.csv("input_data/date.csv")
+
+  if(check_names){
+    s <- c()
+    for (i in 1:n) {
+      # Check if we have a date for the sample
+      included <- grepl(names[i], date[,1])
+      if(sum(included) >= 2){
+        stop(paste("Multiple sample collection dates found for sequence", names[i]))
+      }else if(sum(included) == 1){
+        s[i] <- date[,2][included]
+      }else{
+        s[i] <- NA
+      }
+    }
+    s[1] <- 0
+  }else{
+    s <- date$date[match(names, date$cases)]
+    s[1] <- 0
+  }
+
+
+  ## List of SNVs present per sample
+  message("Processing FASTA and VCF files...")
+  snvs <- list()
+  pb = txtProgressBar(min = 0, max = n, initial = 0)
+  if(check_names){
+    for (i in 1:n) {
+      # Check if we have a VCF file
+      included <- grepl(names[i], vcfs)
+      if(sum(included) >= 2){
+        stop(paste("Multiple VCF files found for sequence", names[i]))
+      }else if(sum(included) == 1){
+        vcf <- read.table(paste0("./input_data/vcf/", vcfs[included]))
+        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+      }else{
+        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
+      }
+      setTxtProgressBar(pb,i)
+    }
+  }else{
+    vcfs_prefix <- gsub(".vcf", "", vcfs)
+    for (i in 1:n) {
+      # Locate the correct vcf file
+      who <- which(vcfs_prefix == names[i])
+      if(length(who) == 1){
+        vcf <- read.table(paste0("./input_data/vcf/", vcfs[who]))
+        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+      }else{
+        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
+      }
+      setTxtProgressBar(pb,i)
+    }
+  }
+  close(pb)
+
+
+
+  # Compile vectors of all positions with SNVs (may have duplicates) and all SNVs (unique)
+  message("Compiling list of mutations...")
+  all_pos <- c()
+  all_snv <- c()
+  pb = txtProgressBar(min = 0, max = n, initial = 0)
+  for (i in 1:n) {
+    calls <- snvs[[i]]$snv$call
+    new <- which(!(calls %in% all_snv))
+    all_snv <- c(all_snv, calls[new])
+    all_pos <- c(all_pos, snvs[[i]]$snv$pos[new])
+    if(!is.null(snvs[[i]]$isnv)){
+      calls <- snvs[[i]]$isnv$call
+      new <- which(!(calls %in% all_snv))
+      all_snv <- c(all_snv, calls[new])
+      all_pos <- c(all_pos, snvs[[i]]$isnv$pos[new])
+    }
+    setTxtProgressBar(pb,i)
+  }
+  close(pb)
+
+  # Remove irrelevant missing site info; add SNVs with missing data
+  message("Identifying missing data in samples...")
+  pb = txtProgressBar(min = 0, max = n, initial = 0)
+  for (i in 1:n) {
+    # Which positions in all_pos are detected in the missing sites in the sample?
+    present <- which(all_pos %in% snvs[[i]]$missing$pos)
+    # Change missing$pos to be a vector of these sites (may have duplicates)
+    snvs[[i]]$missing$pos <- all_pos[present]
+    # Add a new vector of the SNVs for which there's no information
+    snvs[[i]]$missing$call <- all_snv[present]
+    setTxtProgressBar(pb,i)
+  }
+  close(pb)
+
+  ### Initialize MCMC and data
+
+  ## For MCMC initialization: minimum spanning tree
+  if(init_mst){
+    snv_dist <- ape::dist.dna(fasta, "N")
+    tree <- ape::mst(snv_dist)
+    init_h <- adj_to_anc(tree, 1)
+  }
+
+  if(init_ancestry){
+    init_h <- read.table("./input_data/ancestry.csv")[,1]
+  }
+
+  data <- list()
+  data$s <- s
+  data$N <- 1e9 #population size
+  data$n_obs <- n # number of observed hosts, plus 1 (index case)
+  data$n_bases <- n_bases
+  data$snvs <- snvs
+  data$eps <- 0.005 # Explore/exploit tradeoff for genotypes of new nodes
+  data$p_move <- 0.6
+  data$tau = 0.2
+  data$pooled_coalescent <- pooled_coalescent
+  data$disjoint_coalescent <- disjoint_coalescent # Are we using the disjoint (non-overlapping) coalescent?
+  #data$n_cores <-
+  # Number of subtrees to chop into is n_cores, as long as each subtree has at least 100 people
+  data$n_subtrees <- n_subtrees
+  data$n_global <- n_global
+  data$n_local <- n_local
+  data$sample_every <- sample_every
+  data$record <- record
+  #data$n_subtrees <- 3
+  data$filters <- filters
+  data$virus <- virus
+  data$growth <- growth
+
+  mcmc <- list()
+  mcmc$n <- n # number of tracked hosts
+  mcmc$h <- rep(1, n) # ancestors; initialized to index case
+  # mcmc$w <- rep(0, n) # edge weights; initialized to 0
+  # mcmc$w[1] <- 0 # For convenience
+  mcmc$h[1] <- NA
+  mcmc$t <- s - 5 # time of contracting
+  mcmc$t[2:n] <- pmax(mcmc$t[2:n], -3.5)
+  mcmc$m01 <- list() # fixed mutations added in each transmission link
+  mcmc$m10 <- list() # fixed mutations deleted in each transmission link
+  mcmc$m0y <- list() # 0% -> y%, 0 < y < 100
+  mcmc$m1y <- list() # 100% -> y%, 0 < y < 100
+  mcmc$mx0 <- list() # x% -> 0%, 0 < x < 100
+  mcmc$mx1 <- list() # x% -> 100%, 0 < x < 100
+  mcmc$mxy <- list() # x% -> y%, 0 < x < 100, 0 < y < 100
+  for (i in 1:n) {
+    mcmc$m01[[i]] <- snvs[[i]]$snv$call
+    mcmc$m10[[i]] <- character(0)
+    mcmc$m0y[[i]] <- snvs[[i]]$isnv$call
+    mcmc$m1y[[i]] <- character(0)
+    mcmc$mx0[[i]] <- character(0)
+    mcmc$mx1[[i]] <- character(0)
+    mcmc$mxy[[i]] <- character(0)
+  }
+
+  if(init_mst | init_ancestry){
+    gens <- generations(init_h, 1)
+    max_t <- min(s[2:n] - 5)
+
+    message("Initializing transmission network...")
+    progress <- 0
+    pb = txtProgressBar(min = 0, max = n, initial = 0)
+    for (g in 2:length(gens)) {
+      for (i in gens[[g]]) {
+
+        if(g >= 3){
+          anc <- ancestry(init_h, i)
+          for (j in 2:(length(anc) - 1)) {
+            mcmc <- update_genetics_upstream(mcmc, mcmc, i, anc[j])
+            mcmc$m01[[j]] <- setdiff(mcmc$m01[[j]], snvs[[j]]$missing$call) # Remove calls for missing positions
+            mcmc$m10[[j]] <- setdiff(mcmc$m10[[j]], snvs[[j]]$missing$call)
+          }
+        }
+
+
+
+        progress <- progress + 1
+        setTxtProgressBar(pb,progress)
+      }
+
+    }
+    close(pb)
+    mcmc$h <- init_h
+
+    # Initialize time of infection
+    ord <- rev(bfs(1, mcmc$h))
+    mcmc$t <- rep(NA, n)
+    mcmc$t[1] <- -5
+    for (i in ord) {
+      mcmc$t[i] <- min(c(data$s[i] - 5, mcmc$t[which(mcmc$h == i)] - 5))
+    }
+  }
+
+  mcmc$b <- 0.05 # Probability bottleneck has size >1
+  mcmc$a_g <- 5 # shape parameter of the generation interval
+  mcmc$lambda_g <- 1 # rate parameter of the generation interval. FOR NOW: fixing at 1.
+  mcmc$a_s <- 5 # shape parameter of the sojourn interval
+  mcmc$lambda_s <- 1 # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
+  if(virus == "SARS-CoV-2"){
+    mcmc$mu <- 1e-6 # mutation rate, sites/day
+    mcmc$p <- 1e-6 # mutation rate, sites/cycle
+  }else if(virus == "H5N1"){
+    mcmc$mu <- 2e-5 # mutation rate, sites/day
+    mcmc$p <- 5e-6 # mutation rate, sites/cycle
+  }
+  mcmc$v <- 1000 # burst size
+  mcmc$lambda <- 1 # expo growth rate of bursts
+  mcmc$rho <- 0.1 # first parameter, NBin offspring distribution (overdispersion param)
+
+  # Mean number of cases at time t is R^(t/g) = exp(t * log(R) / g), g mean generation interval
+  # growth = log(R) / g => R = exp(g * growth)
+  mcmc$psi <- mcmc$rho / (exp((mcmc$a_g / mcmc$lambda_g) * data$growth) + mcmc$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
+
+  mcmc$w <- round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g)))
+  mcmc$w[1] <- 0
+
+  # Functions of MCMC params
+  mcmc$d <- sapply(1:n, function(x){sum(mcmc$h[2:n] == x)}) # Node degrees
+
+  # Also track the epidemiological and genomic likelihoods, and prior
+  # The genomic likelihood we will store on a per-person basis, for efficiency purposes
+  mcmc$e_lik <- e_lik(mcmc, data)
+  mcmc$g_lik <- c(NA, sapply(2:n, g_lik, mcmc = mcmc, data = data))
+  mcmc$prior <- prior(mcmc)
+
+  return(list(mcmc, data))
+}
