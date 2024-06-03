@@ -1,4 +1,27 @@
-# Initialize mcmc (current state of the markov chain) and data
+#' Initialize Outbreak Reconstruction
+#'
+#' This function initializes the outbreak reconstruction algo.
+#'
+#' @param n_subtrees How many subtrees to parallelize over. Defaults to NULL, in which case it's the number of cores available to the machine, so long as each subtree has at least 25 nodes.
+#' @param n_global Number of global iterations.
+#' @param n_local Number of local iterations per global iteration.
+#' @param sample_every Number of local iterations per one sample. Must divide n_local.
+#' @param name description
+#' @param init_mst Should we initialize to a minimum spanning tree? (Set to FALSE for large datasets due to long runtime.)
+#' @param init_ancestry If TRUE, the initial ancestry is specified in a one-column .csv file called ancestry.csv, where the entry in the ith row is the initial ancestor of host i.
+#' @param record Parameters to be recorded in the MCMC output.
+#' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
+#' @param check_names If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.
+#' @param Virus being studied (affects various presets). So far, options are "SARS-CoV-2" and "H5N1." More to come soon!
+#' @param a_g Shape parameter, generation interval. Defaults to 5.
+#' @param lambda_g Rate parameter, generation interval. Defaults to 1.
+#' @param a_s Shape parameter, sojourn interval. Defaults to 5.
+#' @param lambda_s Rate parameter, sojourn interval. Defaults to 1.
+#' @param rho Overdispersion parameter. Defaults to Inf, indicating the offspring distribution is Poisson.
+#' @param R Reproductive number (average over entire outbreak). Defaults to 1. Exactly one of R and growth may be specified; the other must be set to NULL.
+#' @param growth Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.
+#' @return The initial configuration of the Markov Chain.
+#' @export
 initialize <- function(
     n_subtrees = NULL,
     n_global = 100, # Number of global moves
@@ -18,7 +41,6 @@ initialize <- function(
     rho = Inf, # Overdispersion parameter (Inf indicates Poisson distribution)
     R = 1, # Reproductive number (average over entire outbreak)
     growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
-
 ){
 
   if((!is.null(R) & !is.null(growth)) | (is.null(R) & is.null(growth))){
