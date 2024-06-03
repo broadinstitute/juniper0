@@ -274,7 +274,11 @@ initialize <- function(
   for (i in 1:n) {
     mcmc$m01[[i]] <- snvs[[i]]$snv$call
     mcmc$m10[[i]] <- character(0)
-    mcmc$m0y[[i]] <- ifelse(is.null(snvs[[i]]$isnv$call), character(0), snvs[[i]]$isnv$call)
+    if(is.null(snvs[[i]]$isnv$call)){
+      mcmc$m0y[[i]] <- character(0)
+    }else{
+      mcmc$m0y[[i]] <- snvs[[i]]$isnv$call
+    }
     mcmc$m1y[[i]] <- character(0)
     mcmc$mx0[[i]] <- character(0)
     mcmc$mx1[[i]] <- character(0)
