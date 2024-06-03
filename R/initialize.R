@@ -27,7 +27,7 @@ initialize <- function(
     n_global = 100, # Number of global moves
     n_local = 100, # Number of local moves per global move
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
-    init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large
+    init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
     init_ancestry = FALSE, # Specify the starting ancestry
     record = c("n", "h", "w", "t", "b", "a_g", "lambda_g", "a_s", "lambda_s", "mu", "p", "v", "lambda", "rho", "psi"), # Which aspects of mcmc do we want to record
     filters = NULL,
