@@ -28,7 +28,7 @@
 #' @param noisy Whether to plot the current state of the Markov Chain at each iteration.
 #' @return The MCMC output.
 #' @export
-run_mcmc <- function(init, noisy = F){
+run_mcmc <- function(init, noisy = F, logging = F){
   mcmc <- init[[1]]
   data <- init[[2]]
 
@@ -108,6 +108,21 @@ run_mcmc <- function(init, noisy = F){
       # print(mcmc$a_g)
     }
 
+    if(logging){
+      write.csv(
+        c(
+          mcmc$n,
+          data$n_obs,
+          mcmc$mu,
+          mcmc$p,
+          mcmc$b,
+          mcmc$h,
+          mcmc$t
+        ),
+        quote = F,
+        row.names = NULL
+      )
+    }
 
     # if(r == 10){
     #   data$n_subtrees <- 3
