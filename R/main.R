@@ -120,7 +120,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
           mcmc$t
         ),
         quote = F,
-        row.names = NULL
+        row.names = NULL,
+        file = "log.csv"
       )
     }
 
