@@ -88,7 +88,7 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
     if(noisy){
       message(paste(r, "global iterations complete. Log-likelihood =", round(liks[r], 2)))
-      print(plot_current(mcmc, data))
+      print(plot_network(list(mcmc, data)))
       #print(mcmc$w)
        print(
          paste0(
