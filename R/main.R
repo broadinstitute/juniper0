@@ -117,7 +117,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
           mcmc$p,
           mcmc$b,
           mcmc$h,
-          mcmc$t
+          mcmc$t,
+          mcmc$w
         ),
         quote = F,
         row.names = F,
