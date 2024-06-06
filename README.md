@@ -42,10 +42,14 @@ Finally, in the directory that you created `input_data` create a new R script, w
 Once your data is in the format shown above and you have created an R script in the directory that also contains your `input_data` folder, `juniper0` can be run using default settings as follows: 
 ```
 init <- initialize()
-outbreak_data <- run_mcmc()
+results <- run_mcmc(init)
 ```
 
 To run `juniper0` with custom settings, see the optional arguments available to 'initialize()' in the documentation.
 
 
-Once you have run the above with an appropriate number of iterations and filters, you can view the results by running FILL THIS IN!
+Once you have run the above with an appropriate number of iterations and filters, you can view the results by running
+```
+summarize(results)
+```
+which returns matrices of direct and indirect transmissions and their associated posterior probabilities, and posterior samples of the global mutation rate (substitutitons/site/day), the within-host mutation rate (substitutitons/site/cycle), and the probability of an incomplete bottleneck.
