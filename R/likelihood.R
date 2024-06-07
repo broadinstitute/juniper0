@@ -24,7 +24,9 @@
 e_lik <- function(mcmc, data){
 
   if(
-    any(mcmc$w < 0) #|
+    any(mcmc$w < 0) |
+      (!data$rooted & mcmc$d[1] > 1)
+
     # mcmc$a_g < 0 |
     # mcmc$lambda_g < 0 |
     # mcmc$a_s < 0 |
@@ -34,9 +36,26 @@ e_lik <- function(mcmc, data){
   ){
     return(-Inf)
   }else{
+    # Which people do we compute the epi prior for?
+    if(data$rooted){
+      who <- 2:mcmc$n
+    }else{
+      who <- which(mcmc$h != 1)
+      # Estimate of times of infection for all hosts (tracked and untracked), for correction term
+      ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
+      # xi-coalescent correction term
+      correction <- ifelse(
+        data$R != 1,
+        (log(1 - 1/data$N) / log(data$R)) * sum(data$R^(ts * mcmc$lambda_g / mcmc$a_g) - 1),
+        log(1 - 1/data$N) * sum(ts * mcmc$lambda_g / mcmc$a_g)
+      )
+    }
+
+
+
     return(
       # Generation intervals
-      sum(dgamma(mcmc$t[2:mcmc$n] - mcmc$t[mcmc$h[2:mcmc$n]], shape = (mcmc$w[2:mcmc$n] + 1) * mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
+      sum(dgamma(mcmc$t[who] - mcmc$t[mcmc$h[who]], shape = (mcmc$w[who] + 1) * mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
 
         # Sojourn intervals
         sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
@@ -44,9 +63,12 @@ e_lik <- function(mcmc, data){
         # xi-coalescent
         ifelse(
           mcmc$rho != Inf,
-          sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
-          (sum(mcmc$d) + sum(mcmc$w)) * log(data$R)
-        )
+          sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
+          (sum(mcmc$d) + sum(mcmc$w[who])) * log(data$R)
+        ) +
+        ifelse(data$rooted, 0, correction)
+
+
     )
   }
 }

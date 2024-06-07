@@ -29,7 +29,12 @@ moves <- list()
 # N(0, 3) (random)
 moves$w <- function(mcmc, data){
   # Choose random host with ancestor
-  i <- sample(2:mcmc$n, 1)
+  if(data$rooted){
+    i <- sample(2:mcmc$n, 1)
+  }else{
+    i <- sample(which(mcmc$h != 1), 1)
+  }
+
   h <- mcmc$h[i]
 
   delta_t <- mcmc$t[i] - mcmc$t[h]
@@ -81,7 +86,8 @@ moves$t <- function(mcmc, data){
   i <- sample(setdiff(2:mcmc$n, data$frozen), 1)
   # Proposal
   prop <- mcmc
-  prop$t[i] <- rnorm(1, mcmc$t[i], ifelse(i <= data$n_obs, 1, 10))
+  # Wider variance when it's unobserved, or it's the root of an unrooted tree
+  prop$t[i] <- rnorm(1, mcmc$t[i], ifelse((i > data$n_obs) | (!data$rooted & mcmc$h[i] == 1), 10, 1))
   prop$e_lik <- e_lik(prop, data)
   update <- c(i, which(mcmc$h == i)) # For which hosts must we update the genomic likelihood?
   prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
@@ -98,6 +104,9 @@ moves$t <- function(mcmc, data){
 moves$w_t <- function(mcmc, data){
   # Choose random host with ancestor and children
   choices <- (2:mcmc$n)[which(mcmc$d[2:mcmc$n] > 0)]
+  if(!data$rooted){
+    choices <- setdiff(choices, which(mcmc$h == 1))
+  }
   if(length(choices) == 0){
     return(mcmc)
   }else{
@@ -443,9 +452,14 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
 
     }
   }else{
-    if(h_old == 1 | (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2)){
+    if(
+      h_old == 1 |
+      (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2) |
+      (!data$rooted & mcmc$h[h_old] == 1)
+    ){
       # If no downstream move, reject
       # Also reject if h_old is not observed and has <= 2 total children, because then we can't remove one
+      # Also reject if tree is unrooted and we're moving a new node onto the root
       return(mcmc)
     }else{
 
@@ -512,14 +526,22 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
 ## Global change in ancestor
 # Importance sampling based on other nodes with similar additions / deletions
 moves$h_global <- function(mcmc, data){
-  # Sample any node with ancestor
-  i <- sample(2:mcmc$n, 1)
+  # Choose random host with ancestor
+  if(data$rooted){
+    i <- sample(2:mcmc$n, 1)
+  }else{
+    i <- sample(which(mcmc$h != 1), 1)
+  }
   h_old <- mcmc$h[i]
 
   # Nodes which are infected earlier than i
   choices <- which(mcmc$t < mcmc$t[i])
 
   choices <- setdiff(choices, data$frozen)
+
+  if(!data$rooted){
+    choices <- setdiff(choices, 1)
+  }
 
   if(length(choices) == 0 | (h_old > data$n_obs & mcmc$d[h_old] <= 2)){
     return(mcmc)
@@ -697,21 +719,35 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           return(mcmc)
         }else{
 
-          # New edge weight coming into i, the new host
-          dist <- sample(0:max_dist, 1)
           i <- mcmc$n + 1
+          # Proposal
+          prop <- mcmc
+
+          # New edge weight coming into i, the new host
+          if(!data$rooted & h == 1){
+            dist <- rpois(1, mcmc$a_g / mcmc$lambda_g) # Distance in THIS CASE ONLY is generations back from j1
+            prop$w[i] <- Inf # Initially, its ancestor is 1
+          }else{
+            dist <- sample(0:max_dist, 1)
+            prop$w[i] <- dist # Distance here is generations after h
+          }
 
           # Maximum time i could be infected
           max_t <- min(mcmc$t[js])
 
-          # Proposal
-          prop <- mcmc
+
 
           ## Stick i onto h
           prop$n <- mcmc$n + 1
           prop$h[i] <- h
-          prop$w[i] <- dist
-          prop$t[i] <- mcmc$t[h] + (max_t - mcmc$t[h]) * rbeta(1, dist + 1, max_dist - dist + 1) # Weighted average
+
+          if(!data$rooted & h == 1){
+            prop$t[i] <- max_t - rgamma(1, (dist + 1) * mcmc$a_g / mcmc$lambda_g)
+          }else{
+            prop$t[i] <- mcmc$t[h] + (max_t - mcmc$t[h]) * rbeta(1, dist + 1, max_dist - dist + 1) # Weighted average
+          }
+
+
           prop$d[i] <- 0
           prop$d[h] <- mcmc$d[h] + 1
           #prop$cluster <- c(2:mcmc$n, i)
@@ -734,6 +770,7 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
             }
           }else{
             prop <- shift_upstream(prop, data, j1, h, i)
+            prop$w[j1] <- dist
             for (j2 in j2s) {
               prop <- shift_downstream(prop, data, j2, j1, i)
             }
@@ -763,9 +800,17 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           }
 
           hastings <- hastings -
-            length(j2s) * log(data$p_move) - (length(kids) - length(j2s)) * log(1 - data$p_move) + # P(old -> new): Probability of choosing kids to move onto i
-            log(max_dist + 1) - # P(old -> new): choose how far upstream
-            dbeta((prop$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), dist + 1, max_dist - dist + 1) - # P(old -> new): beta density for t_i
+            length(j2s) * log(data$p_move) - (length(kids) - length(j2s)) * log(1 - data$p_move) - # P(old -> new): Probability of choosing kids to move onto i
+            ifelse(
+              (!data$rooted & h == 1),
+              dpois(dist, mcmc$a_g / mcmc$lambda_g, log = T),
+              -log(max_dist + 1) # P(old -> new): choose how far upstream
+            ) -
+            ifelse(
+              (!data$rooted & h == 1),
+              dgamma(max_t - prop$t[i], (dist + 1) * mcmc$a_g / mcmc$lambda_g, log = T),
+              dbeta((prop$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), dist + 1, max_dist - dist + 1, log = T) # P(old -> new): beta density for t_i
+            ) -
             log_p - # P(old -> new): probability of newly-created genotype for i
             log(sum(prop$h > data$n_obs, na.rm = T)) + # P(new -> old): pick a host with an unobserved ancestor
             log(mcmc$n - 1) # P(old -> new): pick a host with an ancestor
@@ -788,7 +833,14 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
       js <- which(mcmc$h == i)
       j2s <- setdiff(js, j1)
 
-      if((!upstream & any(mcmc$w[j2s] <= mcmc$w[j1])) | (!upstream & j1 %in% data$frozen)){
+      # upstream = T REVERSES upstream create move
+      # upstream = F REVERSES !upstream create move
+
+      if(
+        (!upstream & any(mcmc$w[j2s] <= mcmc$w[j1])) |
+        (!upstream & j1 %in% data$frozen) |
+        (!data$rooted & h == 1 & upstream & length(j2s) > 0) # Because host 1 can't have multiple children
+      ){
         return(mcmc)
       }else{
 
@@ -853,13 +905,26 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           }
         }
 
+        # In the case of unrooted trees and h==1, hastings ratio computed based on generations and time between i and j1
+        dist <- mcmc$w[i]
+
         hastings <- hastings +
-          length(j2s) * log(data$p_move) + (length(kids) - length(j2s)) * log(1 - data$p_move) - # P(new -> old): Probability of choosing kids to move onto i
-          log(max_dist + 1) + # P(new -> old): choose how far upstream
-          dbeta((mcmc$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), mcmc$w[i] + 1, max_dist - mcmc$w[i] + 1) + # P(new -> old): beta density for t_i
+          length(j2s) * log(data$p_move) + (length(kids) - length(j2s)) * log(1 - data$p_move) + # P(new -> old): Probability of choosing kids to move onto i
+          ifelse(
+            (!data$rooted & h == 1),
+            dpois(dist, mcmc$a_g / mcmc$lambda_g, log = T),
+            -log(max_dist + 1) # P(new -> old): choose how far upstream
+          ) +
+          ifelse(
+            (!data$rooted & h == 1),
+            dgamma(max_t - mcmc$t[i], (dist + 1) * mcmc$a_g / mcmc$lambda_g, log = T),
+            dbeta((mcmc$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), dist + 1, max_dist - dist + 1, log = T) # P(new -> old): beta density for t_i
+          ) +
           log_p - # P(new -> old): probability newly-created genotype for i equals genotype for i in "mcmc"
           log(prop$n - 2) + # P(new -> old): pick a host with an ancestor (-2 because haven't yet updated n)
           log(sum(mcmc$h > data$n_obs, na.rm = T)) # P(old -> new): pick a host with an unobserved ancestor
+
+
 
         ## Re-indexing: everyone above i steps down 1, i gets deleted
         prop$h[which(prop$h > i)] <- prop$h[which(prop$h > i)] - 1

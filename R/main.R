@@ -106,6 +106,9 @@ run_mcmc <- function(init, noisy = F, logging = F){
       #print(mcmc$lambda)
       #print(mcmc$h)
       # print(mcmc$a_g)
+       #print(mcmc$e_lik)
+       #print(mcmc$prior)
+       #print(sum(mcmc$g_lik, na.rm = T))
     }
 
     if(logging){

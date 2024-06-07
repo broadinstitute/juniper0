@@ -62,7 +62,13 @@ plot_network <- function(init, type = "standard"){
     xs <- c()
     ystart <- c()
     yend <- c()
-    for (i in 1:mcmc$n) {
+    if(data$rooted){
+      who <- 1:mcmc$n
+    }else{
+      who <- 2:mcmc$n
+      df_standard <- df_standard[-1, ]
+    }
+    for (i in who) {
       kids <- which(h == i)
       if(length(kids) > 0){
         xs <- c(xs, t[i])

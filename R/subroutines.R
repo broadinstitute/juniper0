@@ -175,6 +175,15 @@ generations <- function(h, i){
   }
 }
 
+# Get approximate time of infection for tracked and untracked hosts leading into a node
+get_ts <- function(mcmc, i){
+  delta_t <- mcmc$t[i] - mcmc$t[mcmc$h[i]]
+  # Increment back in time
+  inc <- delta_t / (mcmc$w[i] + 1)
+  seq(mcmc$t[i], by = -inc, length.out = mcmc$w[i] + 1)
+}
+
+
 # Distribution of de novo iSNVs
 denovo <- function(x, p, log = FALSE){
   k <- 1/sqrt(p)

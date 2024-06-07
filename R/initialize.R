@@ -29,6 +29,8 @@ initialize <- function(
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
     init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
     init_ancestry = FALSE, # Specify the starting ancestry
+    rooted = TRUE, # Is the root of the transmission network fixed at the ref sequence?
+    N = NA, # Population size
     record = c("n", "h", "w", "t", "b", "mu", "p"), # Which aspects of mcmc do we want to record
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
@@ -49,6 +51,7 @@ initialize <- function(
   # sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
   # init_mst = FALSE # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
   # init_ancestry = FALSE # Specify the starting ancestry
+  # rooted = F
   # record = c("n", "h", "w", "t", "b", "mu", "p") # Which aspects of mcmc do we want to record
   # filters = NULL
   # check_names = TRUE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
@@ -61,6 +64,10 @@ initialize <- function(
   # rho = Inf # Overdispersion parameter (Inf indicates Poisson distribution)
   # R = 1 # Reproductive number (average over entire outbreak)
   # growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+
+  if(!rooted & is.na(N)){
+    stop("If the root of the tree is not fixed, N must be specified.")
+  }
 
   if((!is.null(R) & !is.null(growth)) | (is.null(R) & is.null(growth))){
     stop("Exactly one of the inputs R and growth may be specified. The other must be set to NULL.")
@@ -231,7 +238,7 @@ initialize <- function(
 
   data <- list()
   data$s <- s
-  data$N <- 1e9 #population size
+  data$N <- N #population size
   data$n_obs <- n # number of observed hosts, plus 1 (index case)
   data$n_bases <- n_bases
   data$snvs <- snvs
@@ -251,6 +258,7 @@ initialize <- function(
   data$growth <- growth
   data$R <- R
   data$vcf_present <- vcf_present
+  data$rooted <- rooted
 
   # Old feature from previous version
   data$pooled_coalescent = T
@@ -323,16 +331,40 @@ initialize <- function(
     }
   }
 
+  # If not rooted, initialize root to earliest case
+  if(!rooted){
+    # Earliest case, besides root
+    earliest <- which.min(s[2:n]) + 1
+
+    # Set infection time one generation earlier, to ensure infectious at time of transmission
+    mcmc$t[earliest] <- mcmc$t[earliest] - (a_g/lambda_g)
+
+    # Time of infection of ref is arbitrarily early
+    mcmc$t[1] <- -Inf
+    data$s[1] <- -Inf
+
+    # Update ancestry
+    mcmc$h[earliest] <- 1
+    mcmc$h[setdiff(2:n, earliest)] <- earliest
+    mcmc$w[earliest] <- Inf
+
+    # Update genetics
+    for (i in setdiff(2:n, earliest)) {
+      mcmc <- update_genetics_upstream(mcmc, mcmc, i, earliest)
+    }
+
+  }
+
   mcmc$b <- 0.05 # Probability bottleneck has size >1
   mcmc$a_g <- a_g # shape parameter of the generation interval
   mcmc$lambda_g <- lambda_g # rate parameter of the generation interval. FOR NOW: fixing at 1.
   mcmc$a_s <- a_s # shape parameter of the sojourn interval
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   if(virus == "SARS-CoV-2"){
-    mcmc$mu <- 1e-6 # mutation rate, sites/day
+    mcmc$mu <- 2.7e-6 # mutation rate, sites/day
     mcmc$p <- 1e-6 # mutation rate, sites/cycle
   }else if(virus == "H5N1"){
-    mcmc$mu <- 2e-5 # mutation rate, sites/day
+    mcmc$mu <- 1e-5 # mutation rate, sites/day
     mcmc$p <- 5e-6 # mutation rate, sites/cycle
   }
   mcmc$v <- 1000 # burst size
