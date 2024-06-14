@@ -163,7 +163,7 @@ initialize <- function(
       if(sum(included) >= 2){
         stop(paste("Multiple VCF files found for sequence", names[i]))
       }else if(sum(included) == 1){
-        vcf <- read.table(paste0("./input_data/vcf/", vcfs[included]))
+        vcf <- read.table(paste0("./input_data/vcf/", vcfs[included]), row.names = NULL)
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
         vcf_present[i] <- TRUE
       }else{
@@ -179,7 +179,7 @@ initialize <- function(
       # Locate the correct vcf file
       who <- which(vcfs_prefix == names[i])
       if(length(who) == 1){
-        vcf <- read.table(paste0("./input_data/vcf/", vcfs[who]))
+        vcf <- read.table(paste0("./input_data/vcf/", vcfs[who]), row.names = NULL)
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
         vcf_present[i] <- TRUE
       }else{
