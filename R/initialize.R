@@ -6,13 +6,13 @@
 #' @param n_global Number of global iterations. Defaults to 100.
 #' @param n_local Number of local iterations per global iteration. Defaults to 100.
 #' @param sample_every Number of local iterations per one sample. Must divide n_local.
-#' @param name description
 #' @param init_mst Should we initialize to a minimum spanning tree? (Set to FALSE for large datasets due to long runtime.)
 #' @param init_ancestry If TRUE, the initial ancestry is specified in a one-column .csv file called ancestry.csv, where the entry in the ith row is the initial ancestor of host i.
+#' @param rooted If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.
 #' @param record Parameters to be recorded in the MCMC output.
 #' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
 #' @param check_names If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.
-#' @param Virus being studied (affects various presets). So far, options are "SARS-CoV-2" and "H5N1." More to come soon!
+#' @param virus being studied (affects various presets). So far, options are "SARS-CoV-2", "H5N1", and "HepA". More to come soon!
 #' @param a_g Shape parameter, generation interval. Defaults to 5.
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
 #' @param a_s Shape parameter, sojourn interval. Defaults to 5.
@@ -20,6 +20,7 @@
 #' @param rho Overdispersion parameter. Defaults to Inf, indicating the offspring distribution is Poisson.
 #' @param R Reproductive number (average over entire outbreak). Defaults to 1. Exactly one of R and growth may be specified; the other must be set to NULL.
 #' @param growth Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.
+#' @param fixed_mu If NA (the default), the mutation rate is estimated. If a numeric value (in substitutions/site/day), the mutation rate is fixed at this value for the duration of the algorithm.
 #' @return The initial configuration of the Markov Chain.
 #' @export
 initialize <- function(

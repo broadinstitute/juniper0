@@ -11,6 +11,8 @@ initialize(
   sample_every = 100,
   init_mst = FALSE,
   init_ancestry = FALSE,
+  rooted = TRUE,
+  N = NA,
   record = c("n", "h", "w", "t", "b", "mu", "p"),
   filters = NULL,
   check_names = TRUE,
@@ -21,7 +23,8 @@ initialize(
   lambda_s = 1,
   rho = Inf,
   R = 1,
-  growth = NULL
+  growth = NULL,
+  fixed_mu = NA
 )
 }
 \arguments{
@@ -37,11 +40,15 @@ initialize(
 
 \item{init_ancestry}{If TRUE, the initial ancestry is specified in a one-column .csv file called ancestry.csv, where the entry in the ith row is the initial ancestor of host i.}
 
+\item{rooted}{If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.}
+
 \item{record}{Parameters to be recorded in the MCMC output.}
 
 \item{filters}{Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.}
 
 \item{check_names}{If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.}
+
+\item{virus}{being studied (affects various presets). So far, options are "SARS-CoV-2", "H5N1", and "HepA". More to come soon!}
 
 \item{a_g}{Shape parameter, generation interval. Defaults to 5.}
 
@@ -57,9 +64,7 @@ initialize(
 
 \item{growth}{Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.}
 
-\item{name}{description}
-
-\item{Virus}{being studied (affects various presets). So far, options are "SARS-CoV-2" and "H5N1." More to come soon!}
+\item{fixed_mu}{If NA (the default), the mutation rate is estimated. If a numeric value (in substitutions/site/day), the mutation rate is fixed at this value for the duration of the algorithm.}
 }
 \value{
 The initial configuration of the Markov Chain.
