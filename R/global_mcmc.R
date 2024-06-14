@@ -30,8 +30,9 @@ global_mcmc <- function(mcmc, data){
   #mcmc <- moves$a_g(mcmc, data)
 
   # Move 6
-  mcmc <- moves$mu(mcmc, data)
-
+  if(!data$fixed_mu){
+    mcmc <- moves$mu(mcmc, data)
+  }
   # Move 7
   mcmc <- moves$p(mcmc, data)
 

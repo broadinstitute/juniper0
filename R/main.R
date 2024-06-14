@@ -135,7 +135,7 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
   }
   return(list(
-    liks, output
+    liks, output, data$n_obs
   ))
 }
 

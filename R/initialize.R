@@ -42,7 +42,8 @@ initialize <- function(
     lambda_s = 1, # Rate parameter, sojourn interval
     rho = Inf, # Overdispersion parameter (Inf indicates Poisson distribution)
     R = 1, # Reproductive number (average over entire outbreak)
-    growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+    growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+    fixed_mu = NA # Should mutation rate be fixed? If a number is given, fixed at that. NA means we estimate mu
 ){
 
   # n_subtrees = NULL
@@ -51,7 +52,8 @@ initialize <- function(
   # sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
   # init_mst = FALSE # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
   # init_ancestry = FALSE # Specify the starting ancestry
-  # rooted = F
+  # rooted = TRUE # Is the root of the transmission network fixed at the ref sequence?
+  # N = NA # Population size
   # record = c("n", "h", "w", "t", "b", "mu", "p") # Which aspects of mcmc do we want to record
   # filters = NULL
   # check_names = TRUE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
@@ -64,10 +66,11 @@ initialize <- function(
   # rho = Inf # Overdispersion parameter (Inf indicates Poisson distribution)
   # R = 1 # Reproductive number (average over entire outbreak)
   # growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
+  # fixed_mu = NA # Should mutation rate be fixed? If a number is given, fixed at that. NA means we estimate mu
 
-  if(!rooted & is.na(N)){
-    stop("If the root of the tree is not fixed, N must be specified.")
-  }
+  # if(!rooted & is.na(N)){
+  #   stop("If the root of the tree is not fixed, N must be specified.")
+  # }
 
   if((!is.null(R) & !is.null(growth)) | (is.null(R) & is.null(growth))){
     stop("Exactly one of the inputs R and growth may be specified. The other must be set to NULL.")
@@ -259,6 +262,11 @@ initialize <- function(
   data$R <- R
   data$vcf_present <- vcf_present
   data$rooted <- rooted
+  if(is.na(fixed_mu)){
+    data$fixed_mu <- F
+  }else{
+    data$fixed_mu <- T
+  }
 
   # Old feature from previous version
   data$pooled_coalescent = T
@@ -360,13 +368,22 @@ initialize <- function(
   mcmc$lambda_g <- lambda_g # rate parameter of the generation interval. FOR NOW: fixing at 1.
   mcmc$a_s <- a_s # shape parameter of the sojourn interval
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
-  if(virus == "SARS-CoV-2"){
-    mcmc$mu <- 2.7e-6 # mutation rate, sites/day
-    mcmc$p <- 1e-6 # mutation rate, sites/cycle
-  }else if(virus == "H5N1"){
-    mcmc$mu <- 1e-5 # mutation rate, sites/day
-    mcmc$p <- 5e-6 # mutation rate, sites/cycle
+  if(is.na(fixed_mu)){
+    if(virus == "SARS-CoV-2"){
+      mcmc$mu <- 2.7e-6 # mutation rate, sites/day
+      mcmc$p <- 1e-6 # mutation rate, sites/cycle
+    }else if(virus == "H5N1"){
+      mcmc$mu <- 1e-5 # mutation rate, sites/day
+      mcmc$p <- 5e-6 # mutation rate, sites/cycle
+    }else if(virus == "HepA"){
+      mcmc$mu <- 2e-6
+      mcmc$p <- 1e-6
+    }
+  }else{
+    mcmc$mu <- fixed_mu
+    mcmc$p <- fixed_mu / 2
   }
+
   mcmc$v <- 1000 # burst size
   mcmc$lambda <- 1 # expo growth rate of bursts
   mcmc$rho <- rho # first parameter, NBin offspring distribution (overdispersion param)

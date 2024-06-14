@@ -238,7 +238,7 @@ moves$a_s <- function(mcmc, data){
 moves$mu <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  if(data$virus == "SARS-CoV-2"){
+  if(data$virus == "SARS-CoV-2" | data$virus == "HepA"){
     sd <- 5e-7
   }else if(data$virus == "H5N1"){
     sd <- 1e-6

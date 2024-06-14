@@ -42,13 +42,13 @@ e_lik <- function(mcmc, data){
     }else{
       who <- which(mcmc$h != 1)
       # Estimate of times of infection for all hosts (tracked and untracked), for correction term
-      ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
-      # xi-coalescent correction term
-      correction <- ifelse(
-        data$R != 1,
-        (log(1 - 1/data$N) / log(data$R)) * sum(data$R^(ts * mcmc$lambda_g / mcmc$a_g) - 1),
-        log(1 - 1/data$N) * sum(ts * mcmc$lambda_g / mcmc$a_g)
-      )
+      # ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
+      # # xi-coalescent correction term
+      # correction <- ifelse(
+      #   data$R != 1,
+      #   (log(1 - 1/data$N) / log(data$R)) * sum(data$R^(ts * mcmc$lambda_g / mcmc$a_g) - 1),
+      #   log(1 - 1/data$N) * sum(ts * mcmc$lambda_g / mcmc$a_g)
+      # )
     }
 
 
@@ -65,8 +65,8 @@ e_lik <- function(mcmc, data){
           mcmc$rho != Inf,
           sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
           (sum(mcmc$d) + sum(mcmc$w[who])) * log(data$R)
-        ) +
-        ifelse(data$rooted, 0, correction)
+        ) #+
+        #ifelse(data$rooted, 0, correction)
 
 
     )
