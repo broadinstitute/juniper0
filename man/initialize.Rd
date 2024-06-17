@@ -16,7 +16,6 @@ initialize(
   record = c("n", "h", "w", "t", "b", "mu", "p"),
   filters = NULL,
   check_names = TRUE,
-  virus = "SARS-CoV-2",
   a_g = 5,
   lambda_g = 1,
   a_s = 5,
@@ -24,7 +23,8 @@ initialize(
   rho = Inf,
   R = 1,
   growth = NULL,
-  fixed_mu = NA
+  init_mu = 1e-05,
+  fixed_mu = F
 )
 }
 \arguments{
@@ -48,8 +48,6 @@ initialize(
 
 \item{check_names}{If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.}
 
-\item{virus}{being studied (affects various presets). So far, options are "SARS-CoV-2", "H5N1", and "HepA". More to come soon!}
-
 \item{a_g}{Shape parameter, generation interval. Defaults to 5.}
 
 \item{lambda_g}{Rate parameter, generation interval. Defaults to 1.}
@@ -64,7 +62,9 @@ initialize(
 
 \item{growth}{Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.}
 
-\item{fixed_mu}{If NA (the default), the mutation rate is estimated. If a numeric value (in substitutions/site/day), the mutation rate is fixed at this value for the duration of the algorithm.}
+\item{init_mu}{Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.}
+
+\item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.}
 }
 \value{
 The initial configuration of the Markov Chain.
