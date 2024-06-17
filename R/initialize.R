@@ -12,7 +12,6 @@
 #' @param record Parameters to be recorded in the MCMC output.
 #' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
 #' @param check_names If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.
-#' @param virus being studied (affects various presets). So far, options are "SARS-CoV-2", "H5N1", and "HepA". More to come soon!
 #' @param a_g Shape parameter, generation interval. Defaults to 5.
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
 #' @param a_s Shape parameter, sojourn interval. Defaults to 5.
@@ -20,7 +19,8 @@
 #' @param rho Overdispersion parameter. Defaults to Inf, indicating the offspring distribution is Poisson.
 #' @param R Reproductive number (average over entire outbreak). Defaults to 1. Exactly one of R and growth may be specified; the other must be set to NULL.
 #' @param growth Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.
-#' @param fixed_mu If NA (the default), the mutation rate is estimated. If a numeric value (in substitutions/site/day), the mutation rate is fixed at this value for the duration of the algorithm.
+#' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
+#' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.
 #' @return The initial configuration of the Markov Chain.
 #' @export
 initialize <- function(
@@ -36,7 +36,7 @@ initialize <- function(
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
-    virus = "SARS-CoV-2", # Pathogen being studied
+    #virus = "SARS-CoV-2", # Pathogen being studied
     a_g = 5, # Shape parameter, generation interval
     lambda_g = 1, # Rate parameter, generation interval
     a_s = 5, # Shape parameter, sojourn interval
@@ -44,7 +44,8 @@ initialize <- function(
     rho = Inf, # Overdispersion parameter (Inf indicates Poisson distribution)
     R = 1, # Reproductive number (average over entire outbreak)
     growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
-    fixed_mu = NA # Should mutation rate be fixed? If a number is given, fixed at that. NA means we estimate mu
+    init_mu = 1e-5,
+    fixed_mu = F # Should mutation rate be fixed? If a number is given, fixed at that. NA means we estimate mu
 ){
 
   # n_subtrees = NULL
@@ -258,16 +259,12 @@ initialize <- function(
   data$record <- record
   #data$n_subtrees <- 3
   data$filters <- filters
-  data$virus <- virus
   data$growth <- growth
   data$R <- R
   data$vcf_present <- vcf_present
   data$rooted <- rooted
-  if(is.na(fixed_mu)){
-    data$fixed_mu <- F
-  }else{
-    data$fixed_mu <- T
-  }
+  data$init_mu <- init_mu
+  data$fixed_mu <- fixed_mu
 
   # Old feature from previous version
   data$pooled_coalescent = T
@@ -369,21 +366,9 @@ initialize <- function(
   mcmc$lambda_g <- lambda_g # rate parameter of the generation interval. FOR NOW: fixing at 1.
   mcmc$a_s <- a_s # shape parameter of the sojourn interval
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
-  if(is.na(fixed_mu)){
-    if(virus == "SARS-CoV-2"){
-      mcmc$mu <- 2.7e-6 # mutation rate, sites/day
-      mcmc$p <- 1e-6 # mutation rate, sites/cycle
-    }else if(virus == "H5N1"){
-      mcmc$mu <- 1e-5 # mutation rate, sites/day
-      mcmc$p <- 5e-6 # mutation rate, sites/cycle
-    }else if(virus == "HepA"){
-      mcmc$mu <- 2e-6
-      mcmc$p <- 1e-6
-    }
-  }else{
-    mcmc$mu <- fixed_mu
-    mcmc$p <- fixed_mu / 2
-  }
+  mcmc$mu <- init_mu
+  mcmc$p <- init_mu / 2
+
 
   mcmc$v <- 1000 # burst size
   mcmc$lambda <- 1 # expo growth rate of bursts

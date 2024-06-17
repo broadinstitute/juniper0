@@ -94,9 +94,9 @@ run_mcmc <- function(init, noisy = F, logging = F){
          paste0(
            "Mutation rate: ",
            signif(mcmc$mu, digits = 4),
-           " subs/site/day, ",
+           " substitutions/site/day, ",
            signif(mcmc$p, digits = 4),
-           " subs/site/cycle"
+           " mutations/site/cycle"
          )
        )
        #print(mcmc$rho * (1 - mcmc$psi) / mcmc$psi)

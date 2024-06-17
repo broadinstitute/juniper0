@@ -52,4 +52,4 @@ Once you have run the above with an appropriate number of iterations and filters
 ```
 summarize(results)
 ```
-which returns matrices of direct and indirect transmissions and their associated posterior probabilities, and posterior samples of the global mutation rate (substitutitons/site/day), the within-host mutation rate (substitutitons/site/cycle), and the probability of an incomplete bottleneck.
+which returns matrices of direct and indirect transmissions and their associated posterior probabilities, and posterior samples of the global mutation rate (substitutitons/site/day), the within-host mutation rate (mutations/site/cycle), and the probability of an incomplete bottleneck.

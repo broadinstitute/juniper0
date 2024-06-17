@@ -238,12 +238,7 @@ moves$a_s <- function(mcmc, data){
 moves$mu <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  if(data$virus == "SARS-CoV-2" | data$virus == "HepA"){
-    sd <- 5e-7
-  }else if(data$virus == "H5N1"){
-    sd <- 1e-6
-  }
-  prop$mu <- rnorm(1, mcmc$mu, sd)
+  prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 5)
   prop$e_lik <- e_lik(prop, data)
   prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
   prop$prior <- prior(prop)
@@ -259,7 +254,7 @@ moves$mu <- function(mcmc, data){
 moves$p <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$p <- rnorm(1, mcmc$p, 5e-7)
+  prop$p <- rnorm(1, mcmc$p, data$init_mu / 10)
   prop$e_lik <- e_lik(prop, data)
   prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
   prop$prior <- prior(prop)
