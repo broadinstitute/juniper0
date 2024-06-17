@@ -93,6 +93,11 @@ breakdown <- function(mcmc, data){
     datas[[i]]$snvs <- datas[[i]]$snvs[joined]
     datas[[i]]$frozen <- setdiff(which(joined %in% subtrees[[1]]), 1)
 
+    # Root always treated as fixed within subtree, UNLESS it's the root subtree
+    if(mcmcs[[i]]$root != 1){
+      datas[[i]]$rooted <- T
+    }
+
     # Degree of roots of other trees needs to be set to 0
     mcmcs[[i]]$d[datas[[i]]$frozen] <- 0
 
