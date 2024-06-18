@@ -265,6 +265,9 @@ initialize <- function(
   data$rooted <- rooted
   data$init_mu <- init_mu
   data$fixed_mu <- fixed_mu
+  data$names <- names
+
+  # Later: could move elements of "data" that aren't used in MCMC to a new "config" list
 
   # Old feature from previous version
   data$pooled_coalescent = T

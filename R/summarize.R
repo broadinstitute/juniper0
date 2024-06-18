@@ -4,11 +4,13 @@
 #'
 #' @param results List returned by run_mcmc().
 #' @param burnin Proportion of MCMC iterations to discard as burnin. Defaults to 0.2.
-#' @return A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in substitutions per site per cycle), and b (probability of incomplete bottleneck).
+#' @return A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in mutations per site per cycle), and b (probability of incomplete bottleneck).
 #' @export
 summarize <- function(results, burnin = 0.2){
   n_reps <- length(results[[1]])
-  n_obs <- results[[3]]
+  names <- results[[3]] # Sequence names
+  rooted <- results[[4]] # Is the tree rooted?
+  n_obs <- length(names) # Number of observed hosts
   indirect <- matrix(0, ncol = n_obs, nrow = n_obs)
   direct <- matrix(0, ncol = n_obs, nrow = n_obs)
   burnin <- n_reps * burnin + 1
@@ -46,8 +48,21 @@ summarize <- function(results, burnin = 0.2){
   indirect <- indirect / (n_reps - burnin + 1)
   direct <- direct / (n_reps - burnin + 1)
 
+  # Name the matrices
+  names[1] <- paste(names[1], "(root)")
+  rownames(direct) <- names
+  colnames(direct) <- names
+  rownames(indirect) <- names
+  colnames(indirect) <- names
+
+  if(!rooted){
+    direct <- direct[2:n_obs, 2:n_obs]
+    indirect <- indirect[2:n_obs, 2:n_obs]
+  }
+
   return(
     list(
+      log_likelihood = results[[1]],
       direct_transmissions = direct,
       indirect_transmissions = indirect,
       mu = mus,
