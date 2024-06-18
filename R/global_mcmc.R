@@ -48,9 +48,9 @@ global_mcmc <- function(mcmc, data){
 }
 
 ## After making global moves, chop up the tree, and make one copy of "mcmc" for each subtree
-breakdown <- function(mcmc, data){
+breakdown <- function(mcmc, data, old_roots){
 
-  subtrees <- chop(mcmc, data)
+  subtrees <- chop(mcmc, data, old_roots)
   n_subtrees <- length(subtrees[[1]])
   mcmcs <- list()
   datas <- list()
@@ -106,6 +106,6 @@ breakdown <- function(mcmc, data){
 
   }
 
-  return(list(mcmcs, datas))
+  return(list(mcmcs, datas, subtrees[[1]])) # Last entry is the vector of roots, used later
 
 }

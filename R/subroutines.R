@@ -659,7 +659,7 @@ gen2 <- function(mcmc){
   return(out)
 }
 
-chop <- function(mcmc, data){
+chop <- function(mcmc, data, old_roots){
 
   # Initial tree (will change)
   h <- mcmc$h
@@ -697,10 +697,11 @@ chop <- function(mcmc, data){
           w[v] <- w[v] + length(kids) + sum(w[kids])
         }
       }
-      # If weight is large enough, and root is observed, hack off a piece of the tree
+      # If weight is large enough, and root is observed, and root isn't previous root, hack off a piece of the tree
       if(
         w[v] >= lambda &
-        v <= data$n_obs
+        v <= data$n_obs &
+        !(v %in% old_roots)
       ){
         if(mcmc$n - length(unlist(trees)) - w[v] >= lambda){
 

@@ -153,7 +153,7 @@ moves$w_t <- function(mcmc, data, recursive = F){
       new_sd <- (max_t - prop$t[i]) / 5
       hastings <- dnorm(delta_t, 0, new_sd, log = T) - dnorm(delta_t, 0, sd, log = T)
 
-      update <- c(is[1], all_js)
+      update <- unique(c(is[1], is[is <= data$n_obs], all_js))
 
     }else{
       prop$t[i] <- mcmc$t[i] + delta_t
@@ -165,7 +165,6 @@ moves$w_t <- function(mcmc, data, recursive = F){
 
 
     prop$e_lik <- e_lik(prop, data)
-    update <- c(i, js) # For which hosts must we update the genomic likelihood?
     prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
     prop$prior <- prior(prop)
 

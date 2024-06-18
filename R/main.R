@@ -44,9 +44,13 @@ run_mcmc <- function(init, noisy = F, logging = F){
     mcmc <- global_mcmc(mcmc, data)
 
     # Chop up the tree into pieces
-    breakdowns <- breakdown(mcmc, data)
+    if(r == 1){
+      roots <- 1
+    }
+    breakdowns <- breakdown(mcmc, data, old_roots = roots)
     mcmcs <- breakdowns[[1]]
     datas <- breakdowns[[2]]
+    roots <- breakdowns[[3]]
 
     if(noisy){
       message(paste("Parallelizing over", length(mcmcs), "cores..."))
