@@ -101,59 +101,68 @@ moves$t <- function(mcmc, data){
 }
 
 ## Update t_i and w_i and w_j's simultaneously, where j is the child of i
-moves$w_t <- function(mcmc, data){
+# If recursive = T, also update time of infection for all ancestors of i
+moves$w_t <- function(mcmc, data, recursive = F){
   # Choose random host with ancestor and children
   choices <- (2:mcmc$n)[which(mcmc$d[2:mcmc$n] > 0)]
-  if(!data$rooted){
+  if(!recursive){
     choices <- setdiff(choices, which(mcmc$h == 1))
   }
+
   if(length(choices) == 0){
     return(mcmc)
   }else{
     i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
     js <- which(mcmc$h == i)
-    # If multiple children, randomize the order
-    if(length(js) > 1){
-      js <- sample(js, length(js), replace = F)
-    }
     h <- mcmc$h[i]
 
-    # How big could the weight of i possibly be?
-    max_dist <- mcmc$w[i] + min(mcmc$w[js])
-
-    prop <- mcmc
-    prop$w[i] <- sample(0:max_dist, 1)
-    delta <- prop$w[i] - mcmc$w[i] # Change in weight
-    prop$w[js] <- mcmc$w[js] - delta
-
-    # Now sample the time i contracts the disease as a beta centered at its new position
+    # Maximum time at which i can be infected
     max_t <- min(mcmc$t[js])
-    prop$t[i] <- mcmc$t[h] + (max_t - mcmc$t[h]) * rbeta(1, prop$w[i] + 1, max_dist - prop$w[i] + 1)
 
-    ## Hastings ratio
-    if(data$pooled_coalescent){
-      hastings <- 0
+    # Minimum time at which i can be infected
+    min_t <- mcmc$t[h]
+
+    # If recursive, SD is proportional to max_t - t[i]
+    if(recursive){
+      sd <- (max_t - mcmc$t[i]) / 5
     }else{
-      hastings <- 0
-      if(length(js) > 1){
-        if(delta > 0){
-          # In this case, we lose weight from the edges leading into the js, so:
-          hastings <- hastings - lchoose(data$N, delta) * (length(js) - 1)  # P(new -> old): add the correct nodes from the population onto each of the #[js] - 1 edges
-             # P(old -> new): delete the correct nodes from js[2], js[3], ...
-
-        }
-        if(delta < 0){
-          hastings <- hastings + # P(new -> old): delete the correct nodes from js[2], js[3], ...
-            lchoose(data$N, -delta) * (length(js) - 1)  # P(old -> new): add the correct nodes from the population to each of js[2], js[3], ...
-        }
-      }
+      sd <- (max_t - mcmc$t[i]) / 10
     }
 
+    # Make the proposal of the change in time and generation
+    delta_t <- rnorm(1, 0, sd)
+    delta_w <- round(delta_t / (mcmc$a_g / mcmc$lambda_g))
 
+    prop <- mcmc
 
-    # Proposal density for the beta draw
-    hastings <- hastings + dbeta((mcmc$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), mcmc$w[i] + 1, max_dist - mcmc$w[i] + 1, log = T) - # P(new -> old)
-      dbeta((prop$t[i] - prop$t[h]) / (max_t - prop$t[h]), prop$w[i] + 1, max_dist - prop$w[i] + 1, log = T) # P(old -> new)
+    if(recursive){
+      # All ancestors, not including root (case 1)
+      is <- ancestry(mcmc$h, i)[-1]
+
+      prop$t[is] <- mcmc$t[is] + delta_t
+      prop$w[is[1]] <- mcmc$w[is[1]] + delta_w
+
+      # All kids of all is
+      all_js <- setdiff(
+        which(mcmc$h %in% is),
+        is
+      )
+
+      prop$w[all_js] <- mcmc$w[all_js] - delta_w
+
+      new_sd <- (max_t - prop$t[i]) / 5
+      hastings <- dnorm(delta_t, 0, new_sd, log = T) - dnorm(delta_t, 0, sd, log = T)
+
+      update <- c(is[1], all_js)
+
+    }else{
+      prop$t[i] <- mcmc$t[i] + delta_t
+      prop$w[i] <- mcmc$w[i] + delta_w
+      prop$w[js] <- mcmc$w[js] - delta_w
+      hastings <- 0
+      update <- c(i, js)
+    }
+
 
     prop$e_lik <- e_lik(prop, data)
     update <- c(i, js) # For which hosts must we update the genomic likelihood?
@@ -951,5 +960,46 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
 }
 
 
+# If multiple children, randomize the order
+# if(length(js) > 1){
+#   js <- sample(js, length(js), replace = F)
+# }
+
+# How big could the weight of i possibly be?
+# max_dist <- mcmc$w[i] + min(mcmc$w[js])
+#
+# prop <- mcmc
+# prop$w[i] <- sample(0:max_dist, 1)
+# delta <- prop$w[i] - mcmc$w[i] # Change in weight
+# prop$w[js] <- mcmc$w[js] - delta
+#
+# # Now sample the time i contracts the disease as a beta centered at its new position
+# max_t <- min(mcmc$t[js])
+# prop$t[i] <- mcmc$t[h] + (max_t - mcmc$t[h]) * rbeta(1, prop$w[i] + 1, max_dist - prop$w[i] + 1)
+#
+# ## Hastings ratio
+# if(data$pooled_coalescent){
+#   hastings <- 0
+# }else{
+#   hastings <- 0
+#   if(length(js) > 1){
+#     if(delta > 0){
+#       # In this case, we lose weight from the edges leading into the js, so:
+#       hastings <- hastings - lchoose(data$N, delta) * (length(js) - 1)  # P(new -> old): add the correct nodes from the population onto each of the #[js] - 1 edges
+#          # P(old -> new): delete the correct nodes from js[2], js[3], ...
+#
+#     }
+#     if(delta < 0){
+#       hastings <- hastings + # P(new -> old): delete the correct nodes from js[2], js[3], ...
+#         lchoose(data$N, -delta) * (length(js) - 1)  # P(old -> new): add the correct nodes from the population to each of js[2], js[3], ...
+#     }
+#   }
+# }
+#
+#
+#
+# # Proposal density for the beta draw
+# hastings <- hastings + dbeta((mcmc$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), mcmc$w[i] + 1, max_dist - mcmc$w[i] + 1, log = T) - # P(new -> old)
+#   dbeta((prop$t[i] - prop$t[h]) / (max_t - prop$t[h]), prop$w[i] + 1, max_dist - prop$w[i] + 1, log = T) # P(old -> new)
 
 
