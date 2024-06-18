@@ -28,7 +28,7 @@ initialize <- function(
     n_global = 100, # Number of global moves
     n_local = 100, # Number of local moves per global move
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
-    init_mst = FALSE, # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
+    init_mst = TRUE, # Should we initialize to a minimum spanning tree?
     init_ancestry = FALSE, # Specify the starting ancestry
     rooted = TRUE, # Is the root of the transmission network fixed at the ref sequence?
     N = NA, # Population size
