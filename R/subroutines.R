@@ -218,7 +218,11 @@ get_max_t <- function(mcmc, data, i){
   if(i <= data$n_obs){
     ts <- c(ts, data$s[i])
   }
-  return(min(ts))
+  if(length(ts) == 0){
+    return(Inf)
+  }else{
+    return(min(ts))
+  }
 }
 
 ## Softmax function, used for choosing arbitrary new ancestors
@@ -700,7 +704,7 @@ chop <- function(mcmc, data, old_roots){
       # If weight is large enough, and root is observed, and root isn't previous root, hack off a piece of the tree
       if(
         w[v] >= lambda &
-        v <= data$n_obs &
+        #v <= data$n_obs &
         !(v %in% old_roots)
       ){
         if(mcmc$n - length(unlist(trees)) - w[v] >= lambda){

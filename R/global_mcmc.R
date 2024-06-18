@@ -51,25 +51,53 @@ global_mcmc <- function(mcmc, data){
 breakdown <- function(mcmc, data, old_roots){
 
   subtrees <- chop(mcmc, data, old_roots)
-  n_subtrees <- length(subtrees[[1]])
+  n_subtrees <- length(subtrees[[1]]) # number of subtrees, indexed 1, 2, ..., n_subtrees
   mcmcs <- list()
   datas <- list()
-  for (i in 1:n_subtrees) {
+
+  for (i in 1:n_subtrees){
+    # Initialize mcmc for each subtree
     mcmcs[[i]] <- mcmc
-    mcmcs[[i]]$root <- subtrees[[1]][i]
-    mcmcs[[i]]$cluster <- subtrees[[2]][[i]]
-    if(mcmcs[[i]]$root == 1){
+    # Initialize a vector of nodes in subtree i that are roots of OTHER subtrees
+    mcmcs[[i]]$external_roots <- integer()
+    # Initialize a vector of WHICH OTHER subtree each one is a root of
+    mcmcs[[i]]$external_subtrees <- integer()
+  }
+  for (i in 1:n_subtrees) {
+
+    # Root of subtree i
+    root <- subtrees[[1]][i]
+
+    # People in subtree i, excluding root
+    cluster <- subtrees[[2]][[i]]
+
+    if(root == 1){
+      # Record which subtree is ancestral to subtree i
       mcmcs[[i]]$anc_cluster <- NA
     }else{
       for (j in 1:n_subtrees) {
-        if(mcmcs[[i]]$root %in% c(subtrees[[1]][j], subtrees[[2]][[j]])){
+        if(root %in% c(subtrees[[1]][j], subtrees[[2]][[j]]) & j != i){
+
+          # Record which subtree is ancestral to subtree i
           mcmcs[[i]]$anc_cluster <- j
+
+          # Record which node in subtree j is a root, and of which subtree it's a root
+          mcmcs[[j]]$external_roots <- c(mcmcs[[j]]$external_roots, root)
+          mcmcs[[j]]$external_subtrees <- c(mcmcs[[j]]$external_subtrees, i)
         }
       }
     }
+  }
 
+  for (i in 1:n_subtrees) {
 
-    joined <- c(mcmcs[[i]]$root, mcmcs[[i]]$cluster)
+    # Root of subtree i
+    root <- subtrees[[1]][i]
+
+    # People in subtree i, excluding root
+    cluster <- subtrees[[2]][[i]]
+
+    joined <- c(root, cluster)
 
     # To save memory: extract only necessary components of MCMC and data
     mcmcs[[i]]$n <- length(joined)
@@ -87,14 +115,24 @@ breakdown <- function(mcmc, data, old_roots){
     mcmcs[[i]]$d <- mcmcs[[i]]$d[joined]
     mcmcs[[i]]$g_lik <- mcmcs[[i]]$g_lik[joined]
 
+    # The roots of external clusters have been relabeled
+    mcmcs[[i]]$external_roots <- match(mcmcs[[i]]$external_roots, joined)
+
     datas[[i]] <- data
     datas[[i]]$s <- datas[[i]]$s[joined]
     datas[[i]]$n_obs <- sum(joined <= data$n_obs)
+    # If the root is unobserved, we treat it as observed anyway, because it cannot be added / deleted
+    if(root > data$n_obs){
+      datas[[i]]$n_obs <- datas[[i]]$n_obs + 1
+    }
+
     datas[[i]]$snvs <- datas[[i]]$snvs[joined]
     datas[[i]]$frozen <- setdiff(which(joined %in% subtrees[[1]]), 1)
 
+    datas[[i]]$observed_root <- (root < data$n_obs)
+
     # Root always treated as fixed within subtree, UNLESS it's the root subtree
-    if(mcmcs[[i]]$root != 1){
+    if(root != 1){
       datas[[i]]$rooted <- T
     }
 
@@ -103,6 +141,9 @@ breakdown <- function(mcmc, data, old_roots){
 
     # e_lik needs to be re-computed based on the smaller set
     mcmcs[[i]]$e_lik <- e_lik(mcmcs[[i]], datas[[i]])
+
+    # Record only observed hosts in each cluster
+    mcmcs[[i]]$cluster <- joined[joined <= data$n_obs]
 
   }
 

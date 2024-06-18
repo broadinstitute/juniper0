@@ -137,6 +137,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
     #   data$n_subtrees <- 3
     # }
 
+    print(all(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data) == mcmc$g_lik[2:mcmc$n]))
+
   }
   return(list(
     liks, output, data$names, data$rooted

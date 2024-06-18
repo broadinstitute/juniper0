@@ -83,7 +83,7 @@ moves$w <- function(mcmc, data){
 ## Update one of the t_i's using a N(0,1) proposal density if observed; N(0, 10) if not
 moves$t <- function(mcmc, data){
   # Choose random host with ancestor
-  i <- sample(setdiff(2:mcmc$n, data$frozen), 1)
+  i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
   # Proposal
   prop <- mcmc
   # Wider variance when it's unobserved, or it's the root of an unrooted tree
@@ -325,7 +325,7 @@ moves$psi <- function(mcmc, data){
 moves$genotype <- function(mcmc, data){
 
   # Choose random host with ancestor
-  i <- sample(setdiff(2:mcmc$n, data$frozen), 1)
+  i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
   js <- which(mcmc$h == i) # Children
   # Let h denote the ancestor of i; never used in computations
 
@@ -380,7 +380,7 @@ moves$genotype <- function(mcmc, data){
 moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resample_w = FALSE){
   # Choose random host with ancestor
   if(resample_t){
-    i <- sample(setdiff(2:mcmc$n, data$frozen), 1)
+    i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
   }else{
     i <- sample(2:mcmc$n, 1)
   }
@@ -404,7 +404,7 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
     children <- children[mcmc$t[children] < max_t]
 
     # Children not allowed to be frozen
-    children <- setdiff(children, data$frozen)
+    children <- setdiff(children, mcmc$external_roots)
 
     # If no valid children, reject
     # Also reject if h_old is not observed and has <= 2 total children, because then we can't remove one
@@ -485,7 +485,7 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
       children <- children[prop$t[children] < max_t]
 
       # Children can't be frozen
-      children <- setdiff(children, data$frozen)
+      children <- setdiff(children, mcmc$external_roots)
 
       # What's the change in edge weight for i?
       change <- prop$w[i] - mcmc$w[i]
@@ -540,7 +540,7 @@ moves$h_global <- function(mcmc, data){
   # Nodes which are infected earlier than i
   choices <- which(mcmc$t < mcmc$t[i])
 
-  choices <- setdiff(choices, data$frozen)
+  choices <- setdiff(choices, mcmc$external_roots)
 
   if(!data$rooted){
     choices <- setdiff(choices, 1)
@@ -597,7 +597,7 @@ moves$h_global <- function(mcmc, data){
 moves$swap <- function(mcmc, data, exchange_children = FALSE){
   # Choose host with a parent and a grandparent
   choices <- which(mcmc$h != 1)
-  choices <- setdiff(choices, data$frozen)
+  choices <- setdiff(choices, mcmc$external_roots)
 
   if(length(choices) == 0){
     return(mcmc)
@@ -753,7 +753,6 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
 
           prop$d[i] <- 0
           prop$d[h] <- mcmc$d[h] + 1
-          #prop$cluster <- c(2:mcmc$n, i)
 
           ## Initialize genotype for i. This is all changing, so we initialize as i loses all iSNVs to 0. Everything else stays the same
           prop$mx0[[i]] <- unique(c(
@@ -841,7 +840,7 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
 
       if(
         (!upstream & any(mcmc$w[j2s] <= mcmc$w[j1])) |
-        (!upstream & j1 %in% data$frozen) |
+        (!upstream & j1 %in% mcmc$external_roots) |
         (!data$rooted & h == 1 & upstream & length(j2s) > 0) # Because host 1 can't have multiple children
       ){
         return(mcmc)
@@ -944,8 +943,8 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
         prop$mxy <- prop$mxy[-i]
         prop$d <- prop$d[-i]
         prop$g_lik <- prop$g_lik[-i]
-        #prop$cluster <- setdiff(prop$cluster, i) # Delete i, then shift everyone bigger down by 1
-        #prop$cluster[which(prop$cluster > i)] <-  prop$cluster[which(prop$cluster > i)] - 1
+
+        prop$external_roots[which(prop$external_roots > i)] <- prop$external_roots[which(prop$external_roots > i)] - 1
 
         # Update the js
         js[js > i] <- js[js > i] - 1

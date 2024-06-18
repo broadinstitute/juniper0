@@ -24,13 +24,13 @@
 
 local_mcmc <- function(mcmc, data){
 
+
   #set.seed(210)
   res <- list()
-#
 
      # mcmc <- mcmcs[[j]]
      # data <- datas[[j]]
-     # data$n_local <- 1
+     # data$n_local <- 100
 
   for (r in 1:data$n_local) {
     # Move 11
@@ -85,6 +85,10 @@ local_mcmc <- function(mcmc, data){
     # Move 27
     mcmc <- moves$create(mcmc, data, create = F, upstream = F)
 
+
+    #print(mcmc$d[mcmc$external_roots])
+
+
     # Append new results
     if(r %% data$sample_every == 0){
       res <- c(res, list(mcmc))
@@ -118,26 +122,47 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
     for (i in 1:n_samples) {
 
       # Get the root cluster of each cluster
-      anc_clusters <- c()
-      roots <- c()
-      for (j in 1:n_subtrees) {
-        roots[j] <- all_res[[j]][[i]]$root
-        anc_clusters[j] <- all_res[[j]][[i]]$anc_cluster
-      }
+      # anc_clusters <- c()
+      # roots <- c()
+      #
+      # for (j in 1:n_subtrees) {
+      #   roots[j] <- all_res[[j]][[i]]$root
+      #   anc_clusters[j] <- all_res[[j]][[i]]$anc_cluster
+      # }
 
       # First determine who the unobserved hosts are in each cluster, so that they may be re-indexed
       displacement <- 0
       mappings <- list()
       for (j in 1:n_subtrees) {
-        mappings[[j]] <- c(all_res[[j]][[i]]$root, all_res[[j]][[i]]$cluster)
-        # Delete unobserved hosts in the initial cluster--they will be renamed
-        mappings[[j]] <- mappings[[j]][mappings[[j]] <= data$n_obs]
-        # How many unobserved hosts are there at this iteration?
+
+        # For now, mappings[[j]] is where hosts 2:n in subtree j get re-indexed to in the output mcmc
+
+        mappings[[j]] <- all_res[[j]][[i]]$cluster
+
+        # How many unobserved hosts are there at this iteration? (Not including root, since that's updated later)
         n_unobs <- all_res[[j]][[i]]$n - datas[[j]]$n_obs
+
         if(n_unobs > 0){
           mappings[[j]] <- c(mappings[[j]], (data$n_obs + displacement + 1):(data$n_obs + displacement + n_unobs))
         }
         displacement <- displacement + n_unobs
+      }
+
+      # Next, append where host 1 in subtree j gets re-indexed to in output mcmc
+      for (j in 1:n_subtrees) {
+        k <- all_res[[j]][[i]]$anc_cluster # Which cluster is ancestral to cluster j?
+        if(is.na(k)){
+          # If it's the root cluster, 1 maps to 1
+          mappings[[j]] <- c(1, mappings[[j]])
+        }else{
+          # Who is the root of cluster j in cluster k?
+          who_root <- all_res[[k]][[i]]$external_roots[which(all_res[[k]][[i]]$external_subtrees == j)]
+          # Append where it maps to under mappings[[k]], remembering to subtract 1 because mappings[[k]] tells us the image of 2:n, not 1:n
+          mappings[[j]] <- c(
+            mappings[[k]][who_root - 1],
+            mappings[[j]]
+          )
+        }
       }
 
 
@@ -166,12 +191,13 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       # Update all entries of mcmc for each cluster (plus roots of upstream clusters)
       for (j in 1:n_subtrees) {
 
+        # UPDATE H
         mcmc$h[mappings[[j]]] <- mappings[[j]][all_res[[j]][[i]]$h]
 
         # Update other components of mcmc (easier!)
 
         # mcmc$d does not update at frozen nodes
-        unfrozen <- setdiff(1:all_res[[j]][[i]]$n, datas[[j]]$frozen)
+        unfrozen <- setdiff(1:all_res[[j]][[i]]$n, all_res[[j]][[i]]$external_roots)
         mcmc$d[mappings[[j]][unfrozen]] <- all_res[[j]][[i]]$d[unfrozen]
 
         mcmc$w[mappings[[j]]] <- all_res[[j]][[i]]$w
