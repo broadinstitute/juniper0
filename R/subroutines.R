@@ -157,6 +157,144 @@ adj_to_anc <- function(adj, i, h = NULL){
   return(h)
 }
 
+
+# Approximate parsimony tree
+split_cluster <- function(cluster, past_muts, id){
+
+  # Mutations in cluster
+  muts <- table(unlist(mcmc$m01[cluster]))
+
+  # Get rid of those that are already accounted for
+  muts <- muts[!(names(muts) %in% past_muts)]
+
+  # If no more mutations, nothing to do!
+  if(length(muts) == 0){
+    return(
+      list(
+        list(
+          cluster,
+          past_muts,
+          id
+        )
+      )
+    )
+  }else{
+    # Best mutation at which to split
+    mut <- names(which.max(muts))
+
+    # Who in the cluster has the mutation?
+    who <- cluster[which(sapply(cluster, function(i){mut %in% mcmc$m01[[i]]}))]
+
+    # If it's everyone, run split_cluster again, now updating past_muts
+    if(length(who) == length(cluster)){
+      return(
+        split_cluster(who, c(past_muts, mut), id)
+      )
+    }else{
+      # Return a list of the two resulting clusters from the split
+      return(
+        c(
+          list(
+            list(
+              cluster,
+              past_muts,
+              id
+            )
+          ),
+          split_cluster(setdiff(cluster, who), past_muts, c(id, "A")),
+          split_cluster(who, c(past_muts, mut), c(id, "B"))
+        )
+      )
+    }
+  }
+}
+
+### Initialize to (approximate) parsimony tree
+# if(FALSE){
+#   pars <- split_cluster(2:n, character(0), character(0))
+#
+#   # For each entry of "pars", who is its ancestor?
+#   pars_anc <- NA
+#   # Mutations added since ancestor
+#   added <- list(character(0))
+#   for (i in 2:length(pars)) {
+#     id <- pars[[i]][[3]]
+#     if(length(id) == 1){
+#       anc_id <- character(0)
+#     }else{
+#       anc_id <- id[1:(length(id) - 1)]
+#     }
+#
+#     for (j in i:1) { # Probably faster to reverse order of inner for loop
+#       if(identical(anc_id, pars[[j]][[3]])){
+#         pars_anc[i] <- j
+#         break
+#       }
+#     }
+#
+#     added[[i]] <- setdiff(pars[[i]][[2]], pars[[pars_anc[i]]][[2]])
+#   }
+#
+#   # Which nodes are terminal?
+#   terminal <- which(!(1:length(pars) %in% pars_anc))
+#
+#   # "pars" is a list of length length(pars).
+#   # For certain elements of this list, we need to create a new unobserved host, which will be assigned some id.
+#   # We track that with this vector:
+#   new_hosts <- rep(NA, length(pars))
+#
+#   # Loop through each entry in "pars" and update transmission tree
+#   for (k in 1:length(pars)) {
+#
+#     if(!(k %in% terminal)){
+#
+#       # Increase n
+#       mcmc$n <- mcmc$n + 1
+#       i <- mcmc$n
+#
+#       new_hosts[k] <- i
+#
+#       if(k == 1){
+#         mcmc$h[i] <- 1
+#
+#         mcmc$m01[[i]] <- setdiff(
+#           added[[k]],
+#           snvs[[1]]$isnv$call
+#         )
+#
+#         mcmc$m10[[i]] <- character(0)
+#
+#         mcmc$m0y <- character(0)
+#         mcmc$m1y[[i]] <- character(0)
+#         mcmc$mx0[[i]] <- setdiff(
+#           snvs[[1]]$isnv$call,
+#           union(
+#             snvs[[i]]$snv$call,
+#             snvs[[i]]$isnv$call
+#           )
+#         )
+#         mcmc$mx1[[i]] <- intersect(
+#           snvs[[1]]$isnv$call,
+#           snvs[[i]]$snv$call
+#         )
+#         if(i==1){
+#           mcmc$mxy[[i]] <- character(0)
+#         }else{
+#           mcmc$mxy[[i]] <- intersect(
+#             snvs[[1]]$isnv$call,
+#             snvs[[i]]$isnv$call
+#           )
+#         }
+#
+#       }else{
+#         mcmc$h[i] <- new_hosts[pars_anc[k]]
+#
+#       }
+#     }
+#   }
+# }
+
+
 # Get the ancestry of a single node, down to the root
 ancestry <- function(h, i){
   if(is.na(h[i])){

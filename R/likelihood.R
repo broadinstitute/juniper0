@@ -109,7 +109,12 @@ g_lik <- function(mcmc, data, i){
     }
 
     # Evolutionary time from first downstream host of h to infection time of i, approx
-    delta_t_prime <- delta_t * mcmc$w[i] / (mcmc$w[i] + 1)
+    if(is.infinite(delta_t)){
+      delta_t_prime <- Inf
+    }else{
+      delta_t_prime <- delta_t * mcmc$w[i] / (mcmc$w[i] + 1)
+    }
+
 
     if(delta_t <= 0){
       -Inf

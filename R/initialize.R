@@ -45,14 +45,14 @@ initialize <- function(
     R = 1, # Reproductive number (average over entire outbreak)
     growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
     init_mu = 1e-5,
-    fixed_mu = F # Should mutation rate be fixed? If a number is given, fixed at that. NA means we estimate mu
+    fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
 ){
 
   # n_subtrees = NULL
   # n_global = 100 # Number of global moves
   # n_local = 100 # Number of local moves per global move
   # sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
-  # init_mst = FALSE # Should we initialize to a minimum spanning tree? Bad idea if dataset is large.
+  # init_mst = TRUE # Should we initialize to a minimum spanning tree?
   # init_ancestry = FALSE # Specify the starting ancestry
   # rooted = TRUE # Is the root of the transmission network fixed at the ref sequence?
   # N = NA # Population size
@@ -60,7 +60,7 @@ initialize <- function(
   # filters = NULL
   # check_names = TRUE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
   # # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
-  # virus = "SARS-CoV-2" # Pathogen being studied
+  # #virus = "SARS-CoV-2", # Pathogen being studied
   # a_g = 5 # Shape parameter, generation interval
   # lambda_g = 1 # Rate parameter, generation interval
   # a_s = 5 # Shape parameter, sojourn interval
@@ -68,7 +68,8 @@ initialize <- function(
   # rho = Inf # Overdispersion parameter (Inf indicates Poisson distribution)
   # R = 1 # Reproductive number (average over entire outbreak)
   # growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
-  # fixed_mu = NA # Should mutation rate be fixed? If a number is given, fixed at that. NA means we estimate mu
+  # init_mu = 1e-5
+  # fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
 
   # if(!rooted & is.na(N)){
   #   stop("If the root of the tree is not fixed, N must be specified.")
@@ -217,6 +218,8 @@ initialize <- function(
   # Remove irrelevant missing site info; add SNVs with missing data
   message("Identifying missing data in samples...")
   pb = txtProgressBar(min = 0, max = n, initial = 0)
+  snv_dist <- ape::dist.dna(fasta, "N")
+  snv_dist_mtx <- as.matrix(snv_dist)
   for (i in 1:n) {
     # Which positions in all_pos are detected in the missing sites in the sample?
     present <- which(all_pos %in% snvs[[i]]$missing$pos)
@@ -224,15 +227,52 @@ initialize <- function(
     snvs[[i]]$missing$pos <- all_pos[present]
     # Add a new vector of the SNVs for which there's no information
     snvs[[i]]$missing$call <- all_snv[present]
+
+
+
     setTxtProgressBar(pb,i)
   }
   close(pb)
+
+  for (i in 1:n) {
+
+    if(length(snvs[[i]]$missing$pos) > 0){
+      ##  For each missing SNV, identify nearest neighbor by SNV distance for which that SNV is *not* missing
+
+      # Nearest neightbors, in order of SNV distance
+      nearest <- sort.int(
+        snv_dist_mtx[i, ],
+        decreasing = F,
+        index.return = T
+      )$ix[-1] # Delete self
+
+      for (j in 1:length(snvs[[i]]$missing$pos)) {
+        # Which SNV are we talking about?
+        snv <- snvs[[i]]$missing$call[j]
+        # Who is the nearest neighbor for whom the SNV is not missing?
+        k <- 1
+        done <- F
+        while (done == F & k <= length(nearest)) {
+          if(snv %in% snvs[[nearest[k]]]$missing$call){
+            k <- k + 1
+          }else{
+            if(snv %in% snvs[[nearest[k]]]$snv$call){
+              # If nearest neighbor has the SNV, add the call to i...
+              snvs[[i]]$snv$call <- c(snvs[[i]]$snv$call, snv)
+            } # ...else do nothing
+          }
+          done <- T
+        }
+        # And, if it's missing in everyone, (done == F still), do nothing
+      }
+    }
+  }
 
   ### Initialize MCMC and data
 
   ## For MCMC initialization: minimum spanning tree
   if(init_mst){
-    snv_dist <- ape::dist.dna(fasta, "N")
+
     tree <- ape::mst(snv_dist)
     init_h <- adj_to_anc(tree, 1)
   }
@@ -289,18 +329,41 @@ initialize <- function(
   mcmc$mx1 <- list() # x% -> 100%, 0 < x < 100
   mcmc$mxy <- list() # x% -> y%, 0 < x < 100, 0 < y < 100
   for (i in 1:n) {
-    mcmc$m01[[i]] <- snvs[[i]]$snv$call
+    mcmc$m01[[i]] <- setdiff(
+      snvs[[i]]$snv$call,
+      snvs[[1]]$isnv$call
+    )
     mcmc$m10[[i]] <- character(0)
     if(is.null(snvs[[i]]$isnv$call)){
       mcmc$m0y[[i]] <- character(0)
     }else{
-      mcmc$m0y[[i]] <- snvs[[i]]$isnv$call
+      mcmc$m0y[[i]] <- setdiff(
+        snvs[[i]]$isnv$call,
+        snvs[[1]]$isnv$call
+      )
     }
     mcmc$m1y[[i]] <- character(0)
-    mcmc$mx0[[i]] <- character(0)
-    mcmc$mx1[[i]] <- character(0)
-    mcmc$mxy[[i]] <- character(0)
+    mcmc$mx0[[i]] <- setdiff(
+      snvs[[1]]$isnv$call,
+      union(
+        snvs[[i]]$snv$call,
+        snvs[[i]]$isnv$call
+      )
+    )
+    mcmc$mx1[[i]] <- intersect(
+      snvs[[1]]$isnv$call,
+      snvs[[i]]$snv$call
+    )
+    if(i==1){
+      mcmc$mxy[[i]] <- character(0)
+    }else{
+      mcmc$mxy[[i]] <- intersect(
+        snvs[[1]]$isnv$call,
+        snvs[[i]]$isnv$call
+      )
+    }
   }
+
 
   if(init_mst | init_ancestry){
     gens <- generations(init_h, 1)

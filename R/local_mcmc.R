@@ -139,6 +139,11 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
 
         mappings[[j]] <- all_res[[j]][[i]]$cluster
 
+        # If root is observed, delete it; it's re-appended later
+        if(datas[[j]]$observed_root){
+          mappings[[j]] <- mappings[[j]][-1]
+        }
+
         # How many unobserved hosts are there at this iteration? (Not including root, since that's updated later)
         n_unobs <- all_res[[j]][[i]]$n - datas[[j]]$n_obs
 
