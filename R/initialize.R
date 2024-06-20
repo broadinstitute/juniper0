@@ -273,8 +273,21 @@ initialize <- function(
   ## For MCMC initialization: minimum spanning tree
   if(init_mst){
 
+    # If unrooted, MST only involves cases 2:n
+    if(!rooted){
+      snv_dist <- ape::dist.dna(fasta[2:n], model = "N")
+    }
+
     tree <- ape::mst(snv_dist)
-    init_h <- adj_to_anc(tree, 1)
+
+    if(rooted){
+      init_h <- adj_to_anc(tree, 1)
+    }else{
+      init_h <- adj_to_anc(tree, which.min(s[2:n])) + 1
+      init_h[which.min(s[2:n])] <- 1
+      init_h <- c(NA, init_h)
+    }
+
   }
 
   if(init_ancestry){
@@ -401,10 +414,16 @@ initialize <- function(
     for (i in ord) {
       mcmc$t[i] <- min(c(data$s[i] - 5, mcmc$t[which(mcmc$h == i)] - 5))
     }
+
+    if(!rooted){
+      # Time of infection of ref is arbitrarily early
+      mcmc$t[1] <- -Inf
+      data$s[1] <- -Inf
+    }
   }
 
-  # If not rooted, initialize root to earliest case
-  if(!rooted){
+  # If not rooted, and not already initialized to MST or custom ancestry, initialize root to earliest case
+  if(!rooted & !init_mst & !init_ancestry){
     # Earliest case, besides root
     earliest <- which.min(s[2:n]) + 1
 

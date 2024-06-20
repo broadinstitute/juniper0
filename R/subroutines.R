@@ -147,7 +147,7 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
 adj_to_anc <- function(adj, i, h = NULL){
   if(is.null(h)){
     h <- rep(0, ncol(adj))
-    h[1] <- NA
+    h[i] <- NA
   }
   children <- which(adj[i,] == 1 & h == 0)
   h[children] <- i
