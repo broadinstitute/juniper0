@@ -373,7 +373,7 @@ initialize <- function(
       )
     }
     if(is.null(snvs[[1]]$isnv$call)){
-      mcmc$mx0[[i]] <- character(0)
+      mcmc$mx1[[i]] <- character(0)
     }else{
       mcmc$mx1[[i]] <- intersect(
         snvs[[1]]$isnv$call,
