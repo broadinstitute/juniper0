@@ -4,7 +4,7 @@
 #'
 #' @param results List returned by run_mcmc().
 #' @param burnin Proportion of MCMC iterations to discard as burnin. Defaults to 0.2.
-#' @return A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in mutations per site per cycle), and b (probability of incomplete bottleneck).
+#' @return A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in mutations per site per cycle), b (probability of incomplete bottleneck), and the time of the MRCA (if the tree is unrooted).
 #' @export
 summarize <- function(results, burnin = 0.2){
   n_reps <- length(results[[1]])
@@ -19,14 +19,23 @@ summarize <- function(results, burnin = 0.2){
   bs <- c()
   mus <- c()
   ps <- c()
+  if(!rooted){
+    tmrca <- c()
+  }
   for (i in burnin:n_reps) {
     bs <- c(bs, results[[2]][[i]]$b)
     mus <- c(mus, results[[2]][[i]]$mu)
     ps <- c(ps, results[[2]][[i]]$p)
 
+
+
     h <- results[[2]][[i]]$h
     n <- results[[2]][[i]]$n
     w <- results[[2]][[i]]$w
+
+    if(!rooted){
+      tmrca <- c(tmrca, results[[2]][[i]]$t[which(h == 1)])
+    }
 
     # Most recent observed ancestor
     h_obs <- c()
@@ -60,14 +69,20 @@ summarize <- function(results, burnin = 0.2){
     indirect <- indirect[2:n_obs, 2:n_obs]
   }
 
-  return(
-    list(
-      log_likelihood = results[[1]],
-      direct_transmissions = direct,
-      indirect_transmissions = indirect,
-      mu = mus,
-      p = ps,
-      b = bs
-    )
+  # If unrooted, return samples of time of MRCA
+
+  out <- list(
+    log_likelihood = results[[1]],
+    direct_transmissions = direct,
+    indirect_transmissions = indirect,
+    mu = mus,
+    p = ps,
+    b = bs
   )
+
+  if(!rooted){
+    out <- c(out, list(time_of_MRCA = tmrca))
+  }
+
+  return(out)
 }

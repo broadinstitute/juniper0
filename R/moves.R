@@ -133,45 +133,49 @@ moves$w_t <- function(mcmc, data, recursive = F){
     delta_t <- rnorm(1, 0, sd)
     delta_w <- round(delta_t / (mcmc$a_g / mcmc$lambda_g))
 
-    prop <- mcmc
-
-    if(recursive){
-      # All ancestors, not including root (case 1)
-      is <- ancestry(mcmc$h, i)[-1]
-
-      prop$t[is] <- mcmc$t[is] + delta_t
-      prop$w[is[1]] <- mcmc$w[is[1]] + delta_w
-
-      # All kids of all is
-      all_js <- setdiff(
-        which(mcmc$h %in% is),
-        is
-      )
-
-      prop$w[all_js] <- mcmc$w[all_js] - delta_w
-
-      new_sd <- (max_t - prop$t[i]) / 5
-      hastings <- dnorm(delta_t, 0, new_sd, log = T) - dnorm(delta_t, 0, sd, log = T)
-
-      update <- unique(c(is[1], is[is <= data$n_obs], all_js))
-
-    }else{
-      prop$t[i] <- mcmc$t[i] + delta_t
-      prop$w[i] <- mcmc$w[i] + delta_w
-      prop$w[js] <- mcmc$w[js] - delta_w
-      hastings <- 0
-      update <- c(i, js)
-    }
-
-
-    prop$e_lik <- e_lik(prop, data)
-    prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
-    prop$prior <- prior(prop)
-
-    if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior + hastings){
-      return(prop)
-    }else{
+    # If move results in negative evolutionary time...reject immediately
+    if(mcmc$t[i] + delta_t > max_t){
       return(mcmc)
+    }else{
+      prop <- mcmc
+
+      if(recursive){
+        # All ancestors, not including root (case 1)
+        is <- ancestry(mcmc$h, i)[-1]
+
+        prop$t[is] <- mcmc$t[is] + delta_t
+        prop$w[is[1]] <- mcmc$w[is[1]] + delta_w
+
+        # All kids of all is
+        all_js <- setdiff(
+          which(mcmc$h %in% is),
+          is
+        )
+
+        prop$w[all_js] <- mcmc$w[all_js] - delta_w
+
+        new_sd <- (max_t - prop$t[i]) / 5
+        hastings <- dnorm(delta_t, 0, new_sd, log = T) - dnorm(delta_t, 0, sd, log = T)
+
+        update <- unique(c(is[1], is[is <= data$n_obs], all_js))
+
+      }else{
+        prop$t[i] <- mcmc$t[i] + delta_t
+        prop$w[i] <- mcmc$w[i] + delta_w
+        prop$w[js] <- mcmc$w[js] - delta_w
+        hastings <- 0
+        update <- c(i, js)
+      }
+
+      prop$e_lik <- e_lik(prop, data)
+      prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
+      prop$prior <- prior(prop)
+
+      if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior + hastings){
+        return(prop)
+      }else{
+        return(mcmc)
+      }
     }
   }
 }

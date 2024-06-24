@@ -12,7 +12,7 @@ summarize(results, burnin = 0.2)
 \item{burnin}{Proportion of MCMC iterations to discard as burnin. Defaults to 0.2.}
 }
 \value{
-A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in substitutions per site per cycle), and b (probability of incomplete bottleneck).
+A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in mutations per site per cycle), b (probability of incomplete bottleneck), and the time of the MRCA (if the tree is unrooted).
 }
 \description{
 This function summarizes the MCMC output.

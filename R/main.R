@@ -138,7 +138,7 @@ run_mcmc <- function(init, noisy = F, logging = F){
     # }
 
     #print(all(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data) == mcmc$g_lik[2:mcmc$n]))
-    print(length(unlist(mcmc$m10)) + length(unlist(mcmc$m01)))
+    #print(length(unlist(mcmc$m10)) + length(unlist(mcmc$m01)))
 
   }
   return(list(

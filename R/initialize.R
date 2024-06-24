@@ -124,6 +124,11 @@ initialize <- function(
     stop("Dataset is too large to use init_mst = TRUE. Specify a strating configuration by using init_ancestry, or initialize to a star-shaped configuration by setting init_mst = FALSE.")
   }
 
+  # Warn when using unrooted tree, unfixed mutation rate
+  if(!rooted & !fixed_mu){
+    message("Warning: Convergence may fail when rooted = FALSE and fixed_mu = FALSE, especially if samples span a short date range. Consider setting one of these arguments to TRUE.")
+  }
+
   # Names of sequences
   names <- names(fasta)
 

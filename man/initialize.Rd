@@ -9,7 +9,7 @@ initialize(
   n_global = 100,
   n_local = 100,
   sample_every = 100,
-  init_mst = FALSE,
+  init_mst = TRUE,
   init_ancestry = FALSE,
   rooted = TRUE,
   N = NA,
