@@ -361,18 +361,26 @@ initialize <- function(
       )
     }
     mcmc$m1y[[i]] <- character(0)
-    mcmc$mx0[[i]] <- setdiff(
-      snvs[[1]]$isnv$call,
-      union(
-        snvs[[i]]$snv$call,
-        snvs[[i]]$isnv$call
+    if(is.null(snvs[[1]]$isnv$call)){
+      mcmc$mx0[[i]] <- character(0)
+    }else{
+      mcmc$mx0[[i]] <- setdiff(
+        snvs[[1]]$isnv$call,
+        union(
+          snvs[[i]]$snv$call,
+          snvs[[i]]$isnv$call
+        )
       )
-    )
-    mcmc$mx1[[i]] <- intersect(
-      snvs[[1]]$isnv$call,
-      snvs[[i]]$snv$call
-    )
-    if(i==1){
+    }
+    if(is.null(snvs[[1]]$isnv$call)){
+      mcmc$mx0[[i]] <- character(0)
+    }else{
+      mcmc$mx1[[i]] <- intersect(
+        snvs[[1]]$isnv$call,
+        snvs[[i]]$snv$call
+      )
+    }
+    if(i==1 | is.null(snvs[[1]]$isnv$call) | is.null(snvs[[i]]$isnv$call)){
       mcmc$mxy[[i]] <- character(0)
     }else{
       mcmc$mxy[[i]] <- intersect(
