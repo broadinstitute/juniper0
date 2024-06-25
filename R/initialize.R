@@ -142,18 +142,21 @@ initialize <- function(
     s <- c()
     for (i in 1:n) {
       # Check if we have a date for the sample
-      included <- grepl(names[i], date[,1])
+      included <- names[i] == date[,1]
       if(sum(included) >= 2){
         stop(paste("Multiple sample collection dates found for sequence", names[i]))
       }else if(sum(included) == 1){
         s[i] <- date[,2][included]
       }else{
         s[i] <- NA
+        if(i > 1 | rooted){
+          stop(paste("No sample collection date found for sequence", names[i]))
+        }
       }
     }
     s[1] <- 0
   }else{
-    s <- date$date[match(names, date$cases)]
+    s <- date[,2][match(names, date[,1])]
     s[1] <- 0
   }
 
