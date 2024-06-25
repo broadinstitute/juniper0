@@ -149,7 +149,7 @@ initialize <- function(
         s[i] <- date[,2][included]
       }else{
         s[i] <- NA
-        if(i > 1 | rooted){
+        if(i > 1){
           stop(paste("No sample collection date found for sequence", names[i]))
         }
       }
