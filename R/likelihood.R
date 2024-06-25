@@ -41,35 +41,87 @@ e_lik <- function(mcmc, data){
       who <- 2:mcmc$n
     }else{
       who <- which(mcmc$h != 1)
+
+    }
+
+    if(data$experimental){
       # Estimate of times of infection for all hosts (tracked and untracked), for correction term
-      # ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
-      # # xi-coalescent correction term
-      # correction <- ifelse(
-      #   data$R != 1,
-      #   (log(1 - 1/data$N) / log(data$R)) * sum(data$R^(ts * mcmc$lambda_g / mcmc$a_g) - 1),
-      #   log(1 - 1/data$N) * sum(ts * mcmc$lambda_g / mcmc$a_g)
-      # )
+      #ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
+
+      # Degrees of all hosts
+      ds <- unlist(lapply(who, function(i, mcmc){c(mcmc$d[i], rep(1, mcmc$w[i]))}, mcmc=mcmc))
+
+      # Include degree of root
+      if(data$rooted){
+        ds <- c(mcmc$d[1], ds)
+      }else{
+        ds <- c(mcmc$d[which(mcmc$h == 1)], ds)
+      }
+
+      # New xi-coalescent
+      #t_max <- max(data$s, na.rm = T) - (mcmc$a_s / mcmc$lambda_s)
+
+      # Probability that all children are unsampled
+      #ss <- exp(log_p_unsampled(mcmc, t_max - ts - (mcmc$a_g / mcmc$lambda_g)))
+
+      # Correction: must not go extinct
+      #p_extinct <- min(1 / mcmc$R, 1)
+
+      #ss <- p_extinct + (1-p_extinct) * ss
+
+      # New idea: ss is just extinction probability, i.e. for each node and each possible offspring that's not accounted for, multiply by P(that lineage goes extinct)
+      ss <- mcmc$p_extinct
+
+      # Worth examining exactly how this function varies with R
+
+      if(is.infinite(mcmc$rho)){
+        # Poisson case
+        xi <- sum(
+          ds * log(mcmc$R) + mcmc$R * (ss - 1)
+        )
+      }else{
+        # Negative Binomial case
+        xi <- sum(
+          (-ds - mcmc$rho) * log(1 + ss * (-1 + mcmc$psi)) + mcmc$rho * log(mcmc$psi) + ds * log(1 - mcmc$psi) + lgamma(ds + mcmc$rho) - lgamma(mcmc$rho)
+        )
+      }
+
+      return(
+        sum(dgamma(mcmc$t[who] - mcmc$t[mcmc$h[who]], shape = (mcmc$w[who] + 1) * mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
+
+          # Sojourn intervals
+          sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
+
+          # xi-coalescent
+          xi # +
+
+          # Probability that observed people sampled, unobserved people aren't
+          # data$n_obs*log(mcmc$alpha) + (mcmc$n - data$n_obs)*log(1-mcmc$alpha)
+      )
+
+    }else{
+      return(
+        # Generation intervals
+        sum(dgamma(mcmc$t[who] - mcmc$t[mcmc$h[who]], shape = (mcmc$w[who] + 1) * mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
+
+          # Sojourn intervals
+          sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
+
+          # xi-coalescent
+          ifelse(
+            mcmc$rho != Inf,
+            sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
+            (sum(mcmc$d) + sum(mcmc$w[who])) * log(data$R)
+          ) #+
+        #ifelse(data$rooted, 0, correction)
+
+
+      )
     }
 
 
 
-    return(
-      # Generation intervals
-      sum(dgamma(mcmc$t[who] - mcmc$t[mcmc$h[who]], shape = (mcmc$w[who] + 1) * mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
 
-        # Sojourn intervals
-        sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
-
-        # xi-coalescent
-        ifelse(
-          mcmc$rho != Inf,
-          sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
-          (sum(mcmc$d) + sum(mcmc$w[who])) * log(data$R)
-        ) #+
-        #ifelse(data$rooted, 0, correction)
-
-
-    )
   }
 }
 

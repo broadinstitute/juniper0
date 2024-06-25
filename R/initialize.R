@@ -45,7 +45,8 @@ initialize <- function(
     R = 1, # Reproductive number (average over entire outbreak)
     growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
     init_mu = 1e-5,
-    fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
+    fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
+    experimental = FALSE
 ){
 
   # n_subtrees = NULL
@@ -334,6 +335,8 @@ initialize <- function(
   data$pooled_coalescent = T
   data$disjoint_coalescent = F
 
+  data$experimental = experimental
+
   mcmc <- list()
   mcmc$n <- n # number of tracked hosts
   mcmc$h <- rep(1, n) # ancestors; initialized to index case
@@ -469,15 +472,41 @@ initialize <- function(
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   mcmc$mu <- init_mu
   mcmc$p <- init_mu / 2
-
-
   mcmc$v <- 1000 # burst size
   mcmc$lambda <- 1 # expo growth rate of bursts
   mcmc$rho <- rho # first parameter, NBin offspring distribution (overdispersion param)
-
   # Mean number of cases at time t is R^(t/g) = exp(t * log(R) / g), g mean generation interval
   # growth = log(R) / g => R = exp(g * growth)
   mcmc$psi <- mcmc$rho / (data$R + mcmc$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
+
+  if(experimental){
+    mcmc$R <- data$R
+    mcmc$alpha <- min(data$n_obs / tot_cases(mcmc, max(mcmc$t) - min(mcmc$t[!is.infinite(mcmc$t)])), 0.95)
+
+    # Probability of extinction
+    if(mcmc$R <= 1){
+      mcmc$p_extinct <- 1
+    }else{
+      if(is.infinite(mcmc$rho)){
+        # Poisson case
+        mcmc$p_extinct = nlm(
+          f = function(x){
+            (x - exp(data$R * (x - 1)))^2
+          },
+          p = 0
+        )$estimate
+      }else{
+        # Negative Binomial case
+        mcmc$p_extinct = nlm(
+          f = function(x){
+            (x - (mcmc$psi/(1 - (1 - mcmc$psi)*x))^mcmc$rho)^2
+          },
+          p = 0
+        )$estimate
+      }
+    }
+  }
+
 
   mcmc$w <- round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g)))
   mcmc$w[1] <- 0

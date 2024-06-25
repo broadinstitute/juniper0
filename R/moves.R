@@ -309,6 +309,26 @@ moves$rho <- function(mcmc, data){
   }
 }
 
+## Update R
+moves$R <- function(mcmc, data){
+  # Proposal
+  prop <- mcmc
+  prop$R <- rnorm(1, mcmc$R, 0.1)
+  if(prop$R <= 0){
+    return(mcmc)
+  }else{
+    prop$psi <- prop$rho / (prop$R + prop$rho)
+    prop$e_lik <- e_lik(prop, data)
+    prop$prior <- prior(prop)
+
+    if(log(runif(1)) < prop$e_lik + prop$prior - mcmc$e_lik - mcmc$prior){
+      return(prop)
+    }else{
+      return(mcmc)
+    }
+  }
+}
+
 ## Update psi using a N(0,0.1) proposal density
 moves$psi <- function(mcmc, data){
   # Proposal

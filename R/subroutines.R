@@ -143,6 +143,20 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
 
 }
 
+# Number of total cases created over an interval of length delta_t
+tot_cases <- function(mcmc, delta_t){
+  if(mcmc$R == 1){
+    (delta_t / (mcmc$a_g / mcmc$lambda_g)) + 1
+  }else{
+    (mcmc$R^((delta_t / (mcmc$a_g / mcmc$lambda_g)) + 1) - 1) / (mcmc$R - 1)
+  }
+}
+
+# log probability none of the cases created over an interval of length delta_t are sampled
+log_p_unsampled <- function(mcmc, delta_t){
+  tot_cases(mcmc, delta_t) * log(1 - mcmc$alpha)
+}
+
 # Convert adjacency matrix to ancestry vector
 adj_to_anc <- function(adj, i, h = NULL){
   if(is.null(h)){
