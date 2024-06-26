@@ -21,7 +21,7 @@ After you have installed `juniper0`, you will need to assemble the data that you
  - `aligned.fasta`
     - This should be an aligned FASTA file that contains all of the genomic samples you would like to reconstruct. 
  - `date.csv`
-    - This should be a csv file where the first column contains the exact name of all genomic sequences in the `aligned.fasta` file and the second column contains the number of days between the collection date of each sample and the earliest collected sample. 
+    - This should be a csv file where the first column contains the exact name of all genomic sequences in the `aligned.fasta` file and the second column contains the number of days between the collection date of each sample and the collection date of `ref.fasta`. 
     - For example if `aligned.fasta` contained three genomes named `genome_1`, `genome_2`, `genome_3` where `genome_1` was tested first, then `date.csv` should look like:
       ```
       date = data.frame(col1=c("genome_1","genome_2","genome_3"), col2=c(0,2,4))
