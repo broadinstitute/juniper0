@@ -61,12 +61,6 @@ e_lik <- function(mcmc, data){
       # New xi-coalescent
       #t_max <- max(data$s, na.rm = T) - (mcmc$a_s / mcmc$lambda_s)
 
-      # Number of people at t_max
-      #n_t_max <- tot_cases(mcmc, t_max)
-
-      # Probability of sampling
-      #alpha <- min(data$n_obs / n_t_max, 1)
-
       # Probability that all children are unsampled
       #ss <- exp(log_p_unsampled(mcmc, t_max - ts - (mcmc$a_g / mcmc$lambda_g)))
 
@@ -99,10 +93,10 @@ e_lik <- function(mcmc, data){
           sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
 
           # xi-coalescent
-          xi #+
+          xi # +
 
           # Probability that observed people sampled, unobserved people aren't
-          #data$n_obs*log(alpha) + (mcmc$n - data$n_obs + sum(data$w))*log(1-alpha)
+          # data$n_obs*log(mcmc$alpha) + (mcmc$n - data$n_obs)*log(1-mcmc$alpha)
       )
 
     }else{
@@ -116,7 +110,7 @@ e_lik <- function(mcmc, data){
           # xi-coalescent
           ifelse(
             mcmc$rho != Inf,
-            sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
+            sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$d) * log((1-mcmc$psi) / mcmc$psi) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
             (sum(mcmc$d) + sum(mcmc$w[who])) * log(data$R)
           ) #+
         #ifelse(data$rooted, 0, correction)
