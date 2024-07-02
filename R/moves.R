@@ -196,6 +196,27 @@ moves$b <- function(mcmc, data){
   }
 }
 
+## Update b using a N(0,0.01) proposal density
+moves$alpha <- function(mcmc, data){
+  # Proposal
+  prop <- mcmc
+  prop$alpha <- rnorm(1, mcmc$alpha, 0.05)
+  if(prop$alpha <= 0 | prop$alpha >= 1){
+    return(mcmc)
+  }else{
+    prop$e_lik <- e_lik(prop, data)
+    prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
+    prop$prior <- prior(prop)
+
+    if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
+      return(prop)
+    }else{
+      return(mcmc)
+    }
+  }
+
+}
+
 ## Update lambda using a N(0,0.5^2) proposal density
 moves$lambda <- function(mcmc, data){
   # Proposal

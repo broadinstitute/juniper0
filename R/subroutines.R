@@ -152,6 +152,26 @@ tot_cases <- function(mcmc, delta_t){
   }
 }
 
+# Probability not sampled in 0, 1, ..., g_max generations
+alpha_gs <- function(mcmc, g_max){
+  out <- 1 - mcmc$alpha
+  for (i in 1:g_max) {
+    if(is.infinite(mcmc$rho)){
+      out <- c(
+        out,
+        (1 - mcmc$alpha) * exp(R * (out[i] - 1))
+      )
+
+    }else{
+      out <- c(
+        out,
+        (1 - mcmc$alpha) * (1 + out[i] * (mcmc$psi - 1))^(-mcmc$rho) * mcmc$psi^mcmc$rho
+      )
+    }
+  }
+  out
+}
+
 # log probability none of the cases created over an interval of length delta_t are sampled
 log_p_unsampled <- function(mcmc, delta_t){
   tot_cases(mcmc, delta_t) * log(1 - mcmc$alpha)

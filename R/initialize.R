@@ -411,8 +411,6 @@ initialize <- function(
           anc <- ancestry(init_h, i)
           for (j in 2:(length(anc) - 1)) {
             mcmc <- update_genetics_upstream(mcmc, mcmc, i, anc[j])
-            mcmc$m01[[j]] <- setdiff(mcmc$m01[[j]], snvs[[j]]$missing$call) # Remove calls for missing positions
-            mcmc$m10[[j]] <- setdiff(mcmc$m10[[j]], snvs[[j]]$missing$call)
           }
         }
 
@@ -481,7 +479,8 @@ initialize <- function(
 
   if(experimental){
     mcmc$R <- data$R
-    mcmc$alpha <- min(data$n_obs / tot_cases(mcmc, max(mcmc$t) - min(mcmc$t[!is.infinite(mcmc$t)])), 0.95)
+    #mcmc$alpha <- min(data$n_obs / tot_cases(mcmc, max(mcmc$t) - min(mcmc$t[!is.infinite(mcmc$t)])), 0.95)
+    mcmc$alpha <- 0.2
 
     # Probability of extinction
     if(mcmc$R <= 1){

@@ -46,7 +46,7 @@ e_lik <- function(mcmc, data){
 
     if(data$experimental){
       # Estimate of times of infection for all hosts (tracked and untracked), for correction term
-      #ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
+      ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
 
       # Degrees of all hosts
       ds <- unlist(lapply(who, function(i, mcmc){c(mcmc$d[i], rep(1, mcmc$w[i]))}, mcmc=mcmc))
@@ -54,12 +54,24 @@ e_lik <- function(mcmc, data){
       # Include degree of root
       if(data$rooted){
         ds <- c(mcmc$d[1], ds)
+        ts <- c(mcmc$t[1], ts)
       }else{
         ds <- c(mcmc$d[which(mcmc$h == 1)], ds)
+        ts <- c(mcmc$t[which(mcmc$h == 1)], ts)
       }
 
       # New xi-coalescent
-      #t_max <- max(data$s, na.rm = T) - (mcmc$a_s / mcmc$lambda_s)
+      t_max <- max(data$s, na.rm = T) - (mcmc$a_s / mcmc$lambda_s)
+
+      mcmc$alpha <-  pmin(data$n_obs / tot_cases(mcmc, t_max), 1)
+
+      # Numbers of generations to t_max, approximately
+      gs <- round(pmax(((t_max - ts) / (mcmc$a_g / mcmc$lambda_g))- 1, 0))
+
+      ags <- alpha_gs(mcmc, max(gs))
+
+      # Probability that all children are unsampled
+      ss <- ags[gs + 1] # Offset by 1 because ags starts with 0 generations
 
       # Probability that all children are unsampled
       #ss <- exp(log_p_unsampled(mcmc, t_max - ts - (mcmc$a_g / mcmc$lambda_g)))
@@ -70,7 +82,7 @@ e_lik <- function(mcmc, data){
       #ss <- p_extinct + (1-p_extinct) * ss
 
       # New idea: ss is just extinction probability, i.e. for each node and each possible offspring that's not accounted for, multiply by P(that lineage goes extinct)
-      ss <- mcmc$p_extinct
+      #ss <- mcmc$p_extinct
 
       # Worth examining exactly how this function varies with R
 
@@ -93,10 +105,12 @@ e_lik <- function(mcmc, data){
           sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
 
           # xi-coalescent
-          xi # +
+          xi +
 
           # Probability that observed people sampled, unobserved people aren't
-          # data$n_obs*log(mcmc$alpha) + (mcmc$n - data$n_obs)*log(1-mcmc$alpha)
+          #dbinom(data$n_obs, mcmc$n + sum(mcmc$w), mcmc$alpha, log = T)
+
+          data$n_obs*log(mcmc$alpha) + (mcmc$n - data$n_obs + sum(mcmc$w))*log(1-mcmc$alpha)
       )
 
     }else{

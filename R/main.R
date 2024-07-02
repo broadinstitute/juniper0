@@ -141,6 +141,7 @@ run_mcmc <- function(init, noisy = F, logging = F){
     #print(length(unlist(mcmc$m10)) + length(unlist(mcmc$m01)))
 
     #print(sum(mcmc$d))
+    #print(mcmc$R)
 
   }
   return(list(
