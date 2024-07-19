@@ -12,6 +12,7 @@
 #' @param record Parameters to be recorded in the MCMC output.
 #' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
 #' @param check_names If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.
+#' @param indir Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs. Defaults to "input_data".
 #' @param a_g Shape parameter, generation interval. Defaults to 5.
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
 #' @param a_s Shape parameter, sojourn interval. Defaults to 5.
@@ -37,6 +38,7 @@ initialize <- function(
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
     #virus = "SARS-CoV-2", # Pathogen being studied
+    indir = "input_data", # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
     a_g = 5, # Shape parameter, generation interval
     lambda_g = 1, # Rate parameter, generation interval
     a_s = 5, # Shape parameter, sojourn interval
@@ -91,8 +93,8 @@ initialize <- function(
       dp = 100,
       sb = 10
     )
-    if(file.exists("./input_data/problematic.csv")){
-      filters$common <- read.csv("./input_data/problematic.csv")[,1]
+    if(file.exists(paste0("./", indir, "/problematic.csv"))){
+      filters$common <- read.csv(paste0("./", indir, "/problematic.csv"))[,1]
     }else{
       filters$common <- integer(0)
     }
@@ -102,13 +104,13 @@ initialize <- function(
   ## Data Processing
 
   # Load the reference sequence
-  ref_genome <- ape::read.FASTA("./input_data/ref.fasta")
+  ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
 
   # Length of genome
   n_bases <- length(ref_genome[[1]])
 
   # Load the FASTA of sequences
-  fasta <- ape::read.FASTA("./input_data/aligned.fasta")
+  fasta <- ape::read.FASTA(paste0("./", indir, "/aligned.fasta"))
 
   # The first genome is itself the ref genome
   fasta <- c(ref_genome, fasta)
@@ -134,10 +136,10 @@ initialize <- function(
   names <- names(fasta)
 
   # VCF files present
-  vcfs <- list.files("./input_data/vcf/")
+  vcfs <- list.files(paste0("./", indir, "/vcf"))
 
   # Date
-  date <- read.csv("input_data/date.csv")
+  date <- read.csv(paste0("./", indir, "/date.csv"))
 
   if(check_names){
     s <- c()
@@ -174,7 +176,7 @@ initialize <- function(
       if(sum(included) >= 2){
         stop(paste("Multiple VCF files found for sequence", names[i]))
       }else if(sum(included) == 1){
-        vcf <- read.table(paste0("./input_data/vcf/", vcfs[included]))
+        vcf <- read.table(paste0("./", indir, "/vcf/", vcfs[included]))
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
         vcf_present[i] <- TRUE
       }else{
@@ -190,7 +192,7 @@ initialize <- function(
       # Locate the correct vcf file
       who <- which(vcfs_prefix == names[i])
       if(length(who) == 1){
-        vcf <- read.table(paste0("./input_data/vcf/", vcfs[who]))
+        vcf <- read.table(paste0("./", indir, "/vcf/", vcfs[who]))
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
         vcf_present[i] <- TRUE
       }else{
@@ -300,7 +302,7 @@ initialize <- function(
   }
 
   if(init_ancestry){
-    init_h <- read.table("./input_data/ancestry.csv")[,1]
+    init_h <- read.table(paste0("./", indir, "/ancestry.csv"))[,1]
   }
 
   data <- list()
@@ -479,31 +481,30 @@ initialize <- function(
 
   if(experimental){
     mcmc$R <- data$R
-    #mcmc$alpha <- min(data$n_obs / tot_cases(mcmc, max(mcmc$t) - min(mcmc$t[!is.infinite(mcmc$t)])), 0.95)
-    mcmc$alpha <- 0.2
+    mcmc$pi <- 0.2 # Probability of sampling
 
     # Probability of extinction
-    if(mcmc$R <= 1){
-      mcmc$p_extinct <- 1
-    }else{
-      if(is.infinite(mcmc$rho)){
-        # Poisson case
-        mcmc$p_extinct = nlm(
-          f = function(x){
-            (x - exp(data$R * (x - 1)))^2
-          },
-          p = 0
-        )$estimate
-      }else{
-        # Negative Binomial case
-        mcmc$p_extinct = nlm(
-          f = function(x){
-            (x - (mcmc$psi/(1 - (1 - mcmc$psi)*x))^mcmc$rho)^2
-          },
-          p = 0
-        )$estimate
-      }
-    }
+    # if(mcmc$R <= 1){
+    #   mcmc$p_extinct <- 1
+    # }else{
+    #   if(is.infinite(mcmc$rho)){
+    #     # Poisson case
+    #     mcmc$p_extinct = nlm(
+    #       f = function(x){
+    #         (x - exp(data$R * (x - 1)))^2
+    #       },
+    #       p = 0
+    #     )$estimate
+    #   }else{
+    #     # Negative Binomial case
+    #     mcmc$p_extinct = nlm(
+    #       f = function(x){
+    #         (x - (mcmc$psi/(1 - (1 - mcmc$psi)*x))^mcmc$rho)^2
+    #       },
+    #       p = 0
+    #     )$estimate
+    #   }
+    # }
   }
 
 

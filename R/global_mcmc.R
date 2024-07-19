@@ -37,8 +37,8 @@ global_mcmc <- function(mcmc, data){
   mcmc <- moves$p(mcmc, data)
 
   if(data$experimental){
-    #mcmc <- moves$alpha(mcmc, data)
-    mcmc <- moves$R(mcmc, data)
+    mcmc <- moves$pi(mcmc, data)
+    #mcmc <- moves$R(mcmc, data)
   }
 
   # Move 8

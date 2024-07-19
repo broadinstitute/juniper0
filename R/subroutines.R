@@ -355,6 +355,15 @@ get_ts <- function(mcmc, i){
   seq(mcmc$t[i], by = -inc, length.out = mcmc$w[i] + 1)
 }
 
+# Get whether someone is observed, in unlisted form
+get_obs <- function(mcmc, data, i){
+  if(i <= data$n_obs){
+    c(T, rep(F, mcmc$w[i]))
+  }else{
+    rep(F, mcmc$w[i] + 1)
+  }
+}
+
 
 # Distribution of de novo iSNVs
 denovo <- function(x, p, log = FALSE){

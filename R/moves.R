@@ -197,11 +197,11 @@ moves$b <- function(mcmc, data){
 }
 
 ## Update b using a N(0,0.01) proposal density
-moves$alpha <- function(mcmc, data){
+moves$pi <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$alpha <- rnorm(1, mcmc$alpha, 0.05)
-  if(prop$alpha <= 0 | prop$alpha >= 1){
+  prop$pi <- rnorm(1, mcmc$pi, 0.05)
+  if(prop$pi <= 0 | prop$pi >= 1){
     return(mcmc)
   }else{
     prop$e_lik <- e_lik(prop, data)

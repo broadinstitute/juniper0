@@ -16,6 +16,7 @@ initialize(
   record = c("n", "h", "w", "t", "b", "mu", "p"),
   filters = NULL,
   check_names = TRUE,
+  indir = "input_data",
   a_g = 5,
   lambda_g = 1,
   a_s = 5,
@@ -24,7 +25,8 @@ initialize(
   R = 1,
   growth = NULL,
   init_mu = 1e-05,
-  fixed_mu = F
+  fixed_mu = F,
+  experimental = FALSE
 )
 }
 \arguments{
@@ -47,6 +49,8 @@ initialize(
 \item{filters}{Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.}
 
 \item{check_names}{If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.}
+
+\item{indir}{Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs. Defaults to "input_data".}
 
 \item{a_g}{Shape parameter, generation interval. Defaults to 5.}
 

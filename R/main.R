@@ -103,16 +103,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
            " mutations/site/cycle"
          )
        )
-       #print(mcmc$rho * (1 - mcmc$psi) / mcmc$psi)
-      # print(length(unlist(mcmc$m01)) + length(unlist(mcmc$m10)))
-      # print(length(unlist(mcmc$mx1)))
-      #print(data$s - mcmc$t[1:data$n_obs])
-      #print(mcmc$lambda)
-      #print(mcmc$h)
-      # print(mcmc$a_g)
-       #print(mcmc$e_lik)
-       #print(mcmc$prior)
-       #print(sum(mcmc$g_lik, na.rm = T))
+       print(mcmc$pi)
+       print(mcmc$R)
     }
 
     if(logging){
