@@ -27,7 +27,7 @@ summarize <- function(results, burnin = 0.2){
     bs <- c(bs, results[[2]][[i]]$b)
     mus <- c(mus, results[[2]][[i]]$mu)
     ps <- c(ps, results[[2]][[i]]$p)
-    pis <- c(pis, results[[2]][[i]]$p)
+    pis <- c(pis, results[[2]][[i]]$pi)
 
 
 
