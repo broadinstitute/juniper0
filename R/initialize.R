@@ -33,7 +33,7 @@ initialize <- function(
     init_ancestry = FALSE, # Specify the starting ancestry
     rooted = TRUE, # Is the root of the transmission network fixed at the ref sequence?
     N = NA, # Population size
-    record = c("n", "h", "w", "t", "b", "mu", "p"), # Which aspects of mcmc do we want to record
+    record = c("n", "h", "w", "t", "b", "mu", "p", "pi"), # Which aspects of mcmc do we want to record
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
@@ -48,7 +48,7 @@ initialize <- function(
     growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
     init_mu = 1e-5,
     fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
-    experimental = FALSE
+    experimental = TRUE
 ){
 
   # n_subtrees = NULL

@@ -19,6 +19,7 @@ summarize <- function(results, burnin = 0.2){
   bs <- c()
   mus <- c()
   ps <- c()
+  pis <- c()
   if(!rooted){
     tmrca <- c()
   }
@@ -26,6 +27,7 @@ summarize <- function(results, burnin = 0.2){
     bs <- c(bs, results[[2]][[i]]$b)
     mus <- c(mus, results[[2]][[i]]$mu)
     ps <- c(ps, results[[2]][[i]]$p)
+    pis <- c(pis, results[[2]][[i]]$p)
 
 
 
@@ -77,7 +79,8 @@ summarize <- function(results, burnin = 0.2){
     indirect_transmissions = indirect,
     mu = mus,
     p = ps,
-    b = bs
+    b = bs,
+    pi = pis
   )
 
   if(!rooted){

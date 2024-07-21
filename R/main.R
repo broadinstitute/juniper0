@@ -103,8 +103,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
            " mutations/site/cycle"
          )
        )
-       print(mcmc$pi)
-       print(mcmc$R)
+       #print(mcmc$pi)
+       #print(mcmc$R)
     }
 
     if(logging){
