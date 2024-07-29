@@ -35,6 +35,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
   output <- list()
   liks <- c()
 
+  #data$n_global = 1
+
   for (r in 1:data$n_global) {
 
     # For reproducible results
@@ -129,11 +131,32 @@ run_mcmc <- function(init, noisy = F, logging = F){
     #   data$n_subtrees <- 3
     # }
 
-    #print(all(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data) == mcmc$g_lik[2:mcmc$n]))
-    #print(length(unlist(mcmc$m10)) + length(unlist(mcmc$m01)))
+    print(mcmc$pi)
+    print(all(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data) == mcmc$g_lik[2:mcmc$n]))
+    #print((sapply(mcmc$m01, length) + sapply(mcmc$m10, length)) / (mcmc$t - mcmc$t[mcmc$h]) / data$n_bases)
+    #hist((sapply(mcmc$m01, length) + sapply(mcmc$m10, length)) / (mcmc$t - mcmc$t[mcmc$h]) / data$n_bases)
+    #print(mean((sapply(mcmc$m01, length) + sapply(mcmc$m10, length)) / (mcmc$t - mcmc$t[mcmc$h]) / data$n_bases, na.rm = T))
+    #print(((sapply(mcmc$m01, length) + sapply(mcmc$m10, length))))
+
+    #print(mean((sapply(mcmc$m01, length) + sapply(mcmc$m10, length)) / (mcmc$t - mcmc$t[mcmc$h] - log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)) / data$n_bases, na.rm = T))
+
+    #print(sapply(mcmc$m01, length))
+
+    #print(sum((mcmc$t - mcmc$t[mcmc$h]), na.rm = T))
+    #print(sum(mcmc$g_lik, na.rm = T))
+    print(sum(sapply(2:data$n_obs, cc_from_root, mcmc=mcmc)))
 
     #print(sum(mcmc$d))
-    #print(mcmc$R)
+    print(mcmc$R)
+
+    print(mcmc$w)
+
+    print(sum(mcmc$w) + mcmc$n)
+
+    #print(sum(mcmc$w))
+    #print(mcmc$m01)
+    #print(mcmc$w)
+    #print(mcmc$v)
 
   }
   return(list(
@@ -141,5 +164,20 @@ run_mcmc <- function(init, noisy = F, logging = F){
   ))
 }
 
+
+# hhh <- c()
+# for (h in 1:1000) {
+#   mcmc <- moves$mu(mcmc, data)
+#   hhh[h] <- mcmc$mu
+# }
+# hist(hhh)
+
+# Get p(iSNV observed) per person
+# p_isnv <- c()
+# freqs <- c()
+# for (i in 1:data$n_obs) {
+#   p_isnv[i] <- length(data$snvs[[i]]$isnv$call) / 10000
+#   freqs <- c(freqs, data$snvs[[i]]$isnv$af)
+# }
 
 

@@ -37,6 +37,7 @@ global_mcmc <- function(mcmc, data){
   mcmc <- moves$p(mcmc, data)
 
   if(data$experimental){
+    #print("hi")
     mcmc <- moves$pi(mcmc, data)
     #mcmc <- moves$R(mcmc, data)
   }

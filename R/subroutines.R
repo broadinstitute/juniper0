@@ -349,10 +349,15 @@ generations <- function(h, i){
 
 # Get approximate time of infection for tracked and untracked hosts leading into a node
 get_ts <- function(mcmc, i){
-  delta_t <- mcmc$t[i] - mcmc$t[mcmc$h[i]]
-  # Increment back in time
-  inc <- delta_t / (mcmc$w[i] + 1)
-  seq(mcmc$t[i], by = -inc, length.out = mcmc$w[i] + 1)
+  if(i == 1){
+    return(mcmc$t[i])
+  }else{
+    delta_t <- mcmc$t[i] - mcmc$t[mcmc$h[i]]
+    # Increment back in time
+    inc <- delta_t / (mcmc$w[i] + 1)
+    seq(mcmc$t[i], by = -inc, length.out = mcmc$w[i] + 1)
+  }
+
 }
 
 # Get whether someone is observed, in unlisted form
@@ -362,6 +367,16 @@ get_obs <- function(mcmc, data, i){
   }else{
     rep(F, mcmc$w[i] + 1)
   }
+}
+
+# JC evolution
+evolveJC <- function(init, mu, delta_t){
+  1/4 + (init - 1/4)*exp(-(4*mu/3) * delta_t)
+}
+
+# Probabilities of successive split bottlenecks, starting with init (initial frequency) (can be a vector)
+p_all_split <- function(b, w, init){
+  (b^(w + 1) * 2 * init * (1 - init) / 3^w)
 }
 
 
@@ -390,6 +405,8 @@ denovo_normed <- function(x, p, filters, log = FALSE){
     ((1-(1-x)^k * (1 + k*x)) / (k*x^2)) / (1 - denovo_cdf(filters$af, p))
   }
 }
+
+# Mean of denovo_normed
 
 
 
@@ -523,7 +540,7 @@ update_genetics_downstream <- function(prop, mcmc, i, h){
   prop$m10[[i]] <- union(prop$m10[[i]], setdiff(mcmc$m10[[i]], all_h)) # 11 in h, 10 in i
 
   prop$m0y[[i]] <- setdiff(mcmc$m0y[[i]], all_h) # 00 in h, 0y in i
-  prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$m10[[h]], mcmc$m1y[[i]])) # 01 in h, 1y in i
+  prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$m01[[h]], mcmc$m1y[[i]])) # 01 in h, 1y in i
   prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$m0y[[h]], mcmc$mxy[[i]])) # 0y in h, xy in i
 
   prop$m1y[[i]] <- setdiff(mcmc$m1y[[i]], all_h) # 11 in h, 1y in i
@@ -914,9 +931,20 @@ chop <- function(mcmc, data, old_roots){
 
 
 
+## For debugging: consensus changes from root
+cc_from_root <- function(mcmc, i){
+  if(i == 1){
+    return(0)
+  }else{
+    anc <- ancestry(mcmc$h, i)
+    count <- 0
+    for (j in anc[2:length(anc)]) {
+      count <- count + length(mcmc$m01[[j]]) + length(mcmc$mx1[[j]]) - length(mcmc$m10[[j]]) - length(mcmc$m1y[[j]])
+    }
+    return(count)
+  }
+}
 
-
-## Plot of nodes only, in radial visualization
 
 
 

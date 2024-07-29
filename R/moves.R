@@ -50,33 +50,58 @@ moves$w <- function(mcmc, data){
 
   prop$w[i] <- mcmc$w[i] + change
 
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[i] <- g_lik(prop, data, i)
-  prop$prior <- prior(prop)
-
-  if(data$pooled_coalescent){
-    # With new coalescent:
-    hastings <- 0
-  }else{
-    # Here the Hastings ratio is not 1, because we're imagining that the newly-added / deleted intermediate hosts are labeled.
-    if(change > 0){
-      # If added new hosts, P(new to old) is probability of correctly selecting the new hosts to delete
-      # P(old to new) is probability choosing the correct new hosts to add from larger population
-      hastings <- -
-        (-lchoose(data$N, change))  # Choose from N, order them, and place them on the edge
-    }else if(change < 0){
-      hastings <- -lchoose(data$N, -change)
-    }else{
-      hastings <- 0
-    }
-  }
-
-
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior + hastings){
-    return(prop)
-  }else{
+  if(prop$w[i] < 0){
     return(mcmc)
   }
+
+  ## Experimental version...
+  if(data$experimental){
+    prop$seq[[i]] <- c(
+      prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+    )
+  }
+
+
+  if(data$experimental){
+    hastings <-
+      # P(new to old): draw the seq values in mcmc
+      lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+      # P(old to new): draw the seq values in prop
+      lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+  }else{
+    # With new coalescent:
+    hastings <- 0
+  }
+
+  return(accept_or_reject(prop, mcmc, data, i, hastings))
+
+}
+
+## Update time of infection for a host on an edge leading to i
+moves$seq <- function(mcmc, data){
+  # Choose random host with ancestor
+  if(data$rooted){
+    i <- sample(2:mcmc$n, 1)
+  }else{
+    i <- sample(which(mcmc$h != 1), 1)
+  }
+
+  # If no intermediate hosts, nothing to do
+  if(mcmc$w[i] == 0){
+    return(mcmc)
+  }else{
+
+    # Proposal: resample all intermediate hosts' times of infection
+    prop <- mcmc
+    prop$seq[[i]] <- c(
+      prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+    )
+
+    return(accept_or_reject(prop, mcmc, data, i))
+
+  }
+
+
 
 }
 
@@ -88,26 +113,38 @@ moves$t <- function(mcmc, data){
   prop <- mcmc
   # Wider variance when it's unobserved, or it's the root of an unrooted tree
   prop$t[i] <- rnorm(1, mcmc$t[i], ifelse((i > data$n_obs) | (!data$rooted & mcmc$h[i] == 1), 10, 1))
-  prop$e_lik <- e_lik(prop, data)
-  update <- c(i, which(mcmc$h == i)) # For which hosts must we update the genomic likelihood?
-  prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
-  prop$prior <- prior(prop)
 
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-    return(prop)
-  }else{
+  if(prop$t[i] < prop$t[prop$h[i]]){
     return(mcmc)
   }
+
+  # Resample seq
+  if(data$experimental){
+    prop$seq[[i]] <- c(
+      prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+    )
+
+    hastings <-
+      # P(new to old): draw the seq values in mcmc
+      lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+      # P(old to new): draw the seq values in prop
+      lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+
+  }else{
+    hastings <- 0
+  }
+
+  update <- c(i, which(mcmc$h ==i))
+
+
+  return(accept_or_reject(prop, mcmc, data, update, hastings))
 }
 
 ## Update t_i and w_i and w_j's simultaneously, where j is the child of i
 # If recursive = T, also update time of infection for all ancestors of i
 moves$w_t <- function(mcmc, data, recursive = F){
-  # Choose random host with ancestor and children
-  choices <- (2:mcmc$n)[which(mcmc$d[2:mcmc$n] > 0)]
-  if(!recursive){
-    choices <- setdiff(choices, which(mcmc$h == 1))
-  }
+  # Choose random host with ancestor
+  choices <- setdiff(2:mcmc$n, mcmc$external_roots)
 
   if(length(choices) == 0){
     return(mcmc)
@@ -117,7 +154,11 @@ moves$w_t <- function(mcmc, data, recursive = F){
     h <- mcmc$h[i]
 
     # Maximum time at which i can be infected
-    max_t <- min(mcmc$t[js])
+    if(i <= data$n_obs){
+      max_t <- min(c(mcmc$t[js], data$s[i]))
+    }else{
+      max_t <- min(mcmc$t[js])
+    }
 
     # Minimum time at which i can be infected
     min_t <- mcmc$t[h]
@@ -146,7 +187,7 @@ moves$w_t <- function(mcmc, data, recursive = F){
         prop$t[is] <- mcmc$t[is] + delta_t
         prop$w[is[1]] <- mcmc$w[is[1]] + delta_w
 
-        # All kids of all is
+        # All kids of all i's, excluding i's
         all_js <- setdiff(
           which(mcmc$h %in% is),
           is
@@ -157,7 +198,7 @@ moves$w_t <- function(mcmc, data, recursive = F){
         new_sd <- (max_t - prop$t[i]) / 5
         hastings <- dnorm(delta_t, 0, new_sd, log = T) - dnorm(delta_t, 0, sd, log = T)
 
-        update <- unique(c(is[1], is[is <= data$n_obs], all_js))
+        update <- c(is, all_js)
 
       }else{
         prop$t[i] <- mcmc$t[i] + delta_t
@@ -167,15 +208,24 @@ moves$w_t <- function(mcmc, data, recursive = F){
         update <- c(i, js)
       }
 
-      prop$e_lik <- e_lik(prop, data)
-      prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
-      prop$prior <- prior(prop)
-
-      if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior + hastings){
-        return(prop)
-      }else{
+      if(any(prop$w[update] < 0) | any(prop$t[update] <= prop$t[prop$h[update]])){
         return(mcmc)
       }
+
+      # For each case in update: resample seq
+      for (i in update) {
+        prop$seq[[i]] <- c(
+          prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+        )
+
+        hastings <- hastings +
+          # P(new to old): draw the seq values in mcmc
+          lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+          # P(old to new): draw the seq values in prop
+          lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+      }
+
+      return(accept_or_reject(prop, mcmc, data, update, hastings))
     }
   }
 }
@@ -185,15 +235,8 @@ moves$b <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$b <- rnorm(1, mcmc$b, 0.1)
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
+  update <- 2:mcmc$n
+  return(accept_or_reject(prop, mcmc, data, update))
 }
 
 ## Update b using a N(0,0.01) proposal density
@@ -204,15 +247,8 @@ moves$pi <- function(mcmc, data){
   if(prop$pi <= 0 | prop$pi >= 1){
     return(mcmc)
   }else{
-    prop$e_lik <- e_lik(prop, data)
-    prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
-    prop$prior <- prior(prop)
-
-    if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-      return(prop)
-    }else{
-      return(mcmc)
-    }
+    update <- 2:mcmc$n
+    return(accept_or_reject(prop, mcmc, data, update))
   }
 
 }
@@ -272,15 +308,9 @@ moves$mu <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 5)
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
-  prop$prior <- prior(prop)
 
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
+  update <- 2:mcmc$n
+  return(accept_or_reject(prop, mcmc, data, update))
 }
 
 ## Update p using a N(0,1e-7) proposal density
@@ -288,15 +318,8 @@ moves$p <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$p <- rnorm(1, mcmc$p, data$init_mu / 10)
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
+  update <- 2:mcmc$n
+  return(accept_or_reject(prop, mcmc, data, update))
 }
 
 ## Update v using a N(0,100) proposal density (rounded)
@@ -403,18 +426,8 @@ moves$genotype <- function(mcmc, data){
 
     prop <- flip_genotype(prop, mcmc, i, js, snv)
 
-    prop$e_lik <- e_lik(prop, data)
     update <- c(i, js) # For which hosts must we update the genomic likelihood?
-    prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
-    prop$prior <- prior(prop)
-
-    if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-      #print(i)
-      #print(snv)
-      return(prop)
-    }else{
-      return(mcmc)
-    }
+    return(accept_or_reject(prop, mcmc, data, update, hastings))
 
   }
 }
@@ -465,27 +478,28 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
       # What's the change in edge weight for i?
       change <- prop$w[i] - mcmc$w[i]
 
+
+
+      # Update seq for i
+      if(prop$w[i] < 0 | prop$t[i] <= prop$t[prop$h[i]]){
+        return(mcmc)
+      }
+
+      #print(prop$w[i])
+
+      if(data$experimental){
+        prop$seq[[i]] <- c(
+          prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+        )
+      }
+
       update <- i
       # If updating t, need to also change genomic likelihood of children of i
       if(resample_t){
         update <- c(update, which(mcmc$h == i))
       }
 
-      if(data$pooled_coalescent){
-        hastings <- 0
-      }else{
-        hastings <- 0
-        if(change < 0){
-          hastings <- hastings - lchoose(data$N, -change)  # P(new -> old): choose [change] people to add back onto the edge
-          # P(old -> new): choose [change] people to delete from the edge
-        }
-        if(change > 0){
-          hastings <- hastings - # P(new -> old): choose [change] people to delete from the edge
-            (-lchoose(data$N, change))   # P(old -> new): choose [change] people to add back onto the edge
-        }
-      }
-
-      hastings <- hastings + log(length(children)) # P(new -> old): 1; P(old -> new): choose from among #[children] people to be h_new
+      hastings <- log(length(children)) # P(new -> old): 1; P(old -> new): choose from among #[children] people to be h_new
 
       if(resample_t){
         hastings <- hastings - log(max_t - mcmc$t[h_old]) + # P(new -> old): uniform draw of time of infection
@@ -494,6 +508,14 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
       if(resample_w){ # Poisson draw for edge weights
         hastings <- hastings + dpois(mcmc$w[i], (mcmc$t[i] - mcmc$t[h_old]) * mcmc$lambda_g / mcmc$a_g, log = T) -
           dpois(prop$w[i], (prop$t[i] - prop$t[h_new]) * mcmc$lambda_g / mcmc$a_g, log = T)
+      }
+
+      if(data$experimental){
+        hastings <- hastings +
+          # P(new to old): draw the seq values in mcmc
+          lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+          # P(old to new): draw the seq values in prop
+          lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
       }
 
       return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -535,27 +557,23 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
       # What's the change in edge weight for i?
       change <- prop$w[i] - mcmc$w[i]
 
+      # Update seq for i
+      if(prop$w[i] < 0 | prop$t[i] <= prop$t[prop$h[i]]){
+        return(mcmc)
+      }
+      if(data$experimental){
+        prop$seq[[i]] <- c(
+          prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+        )
+      }
+
       update <- i
       # If updating t, need to also change genomic likelihood of children of i
       if(resample_t){
         update <- c(update, which(mcmc$h == i))
       }
 
-      if(data$pooled_coalescent){
-        hastings <- 0
-      }else{
-        hastings <- 0
-        if(change < 0){
-          hastings <- hastings - lchoose(data$N, -change)   # P(new -> old): choose [change] people to add back onto the edge
-             # P(old -> new): choose [change] people to delete from the edge
-        }
-        if(change > 0){
-          hastings <- hastings  - # P(new -> old): choose [change] people to delete from the edge
-            (-lchoose(data$N, change)) # P(old -> new): choose [change] people to add back onto the edge
-        }
-      }
-
-      hastings <- hastings - log(length(children)) # P(new -> old): choose from among #[children] people to be h_new; P(old -> new): 1
+      hastings <- -log(length(children)) # P(new -> old): choose from among #[children] people to be h_new; P(old -> new): 1
 
       if(resample_t){
         hastings <- hastings - log(max_t - mcmc$t[h_old]) + # P(new -> old): uniform draw of time of infection
@@ -564,6 +582,14 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
       if(resample_w){ # Poisson draw for edge weights
         hastings <- hastings + dpois(mcmc$w[i], (mcmc$t[i] - mcmc$t[h_old]) * mcmc$lambda_g / mcmc$a_g, log = T) -
           dpois(prop$w[i], (prop$t[i] - prop$t[h_new]) * mcmc$lambda_g / mcmc$a_g, log = T)
+      }
+
+      if(data$experimental){
+        hastings <- hastings +
+          # P(new to old): draw the seq values in mcmc
+          lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+          # P(old to new): draw the seq values in prop
+          lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
       }
 
       return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -600,6 +626,10 @@ moves$h_global <- function(mcmc, data){
 
     h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = scores))
 
+    if(mcmc$t[i] < mcmc$t[h_new]){
+      return(mcmc)
+    }
+
     # Find the path from h_old to h_new
     route <- paths(mcmc$h, h_old, h_new)
     down <- route[[1]]
@@ -619,20 +649,31 @@ moves$h_global <- function(mcmc, data){
       }
     }
 
-    prop$e_lik <- e_lik(prop, data)
+    if(prop$w[i] < 0){
+      return(mcmc)
+    }
+
+
+
     update <- i
-    prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
-    prop$prior <- prior(prop)
 
     rev_scores <- softmax(sapply(choices, score, mcmc=prop, i=i), data$tau)
     hastings <- log(rev_scores[which(choices == h_old)]) - log(scores[which(choices == h_new)])
 
-    if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior + hastings){
-      #print("way to go!")
-      return(prop)
-    }else{
-      return(mcmc)
-    }
+    # Update seq
+    prop$seq[[i]] <- c(
+      prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+    )
+
+
+
+    hastings <- hastings +
+      # P(new to old): draw the seq values in mcmc
+      lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+      # P(old to new): draw the seq values in prop
+      lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+
+    return(accept_or_reject(prop, mcmc, data, update, hastings))
   }
 }
 
@@ -694,20 +735,27 @@ moves$swap <- function(mcmc, data, exchange_children = FALSE){
       }
 
 
-      prop$e_lik <- e_lik(prop, data)
       update <- c(i, j, children_i, children_j) # For which hosts must we update the genomic likelihood?
-      prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
-      prop$prior <- prior(prop)
+      hastings <- 0
 
-      # Accept / reject
-      if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-        # if(exchange_children){
-        #   print("BASED")
-        # }
-        return(prop)
-      }else{
+      if(any(prop$t[update] < prop$t[prop$h[update]]) | any(prop$w[update] < 0)){
         return(mcmc)
       }
+
+      # For each case in update: resample seq
+      for (i in update) {
+        prop$seq[[i]] <- c(
+          prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+        )
+
+        hastings <- hastings +
+          # P(new to old): draw the seq values in mcmc
+          lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+          # P(old to new): draw the seq values in prop
+          lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+      }
+
+      return(accept_or_reject(prop, mcmc, data, update, hastings))
     }
   }
 }
@@ -828,26 +876,16 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           prop <- geno[[1]]
           log_p <- geno[[2]]
 
-          ## Hastings ratio
-          if(data$pooled_coalescent){
-            hastings <- 0
-          }else{
-            # Delta is change in number of hosts along edges into j2s
-            hastings <- 0
-            if(upstream){
-              delta <- dist + 1
-              # In this case, we lose weight from the edges leading into the j2s, so:
-              hastings <- hastings - lchoose(data$N, delta) * length(j2s)  # P(new -> old): add the correct nodes from the population onto each of the #[js] - 1 edges
-                 # P(old -> new): delete the correct nodes from js[2], js[3], ...
-            }else{
-              delta <- prop$w[j1] + 1
-              hastings <- hastings  + # P(new -> old): delete the correct nodes from js[2], js[3], ...
-                lchoose(data$N, delta) * length(j2s)  # P(old -> new): add the correct nodes from the population to each of js[2], js[3], ...
+          # Create seq for i and each j in js
+          if(data$experimental){
+            for (j in c(i, js)) {
+              prop$seq[[j]] <- c(prop$t[j], sort(runif(prop$w[j], prop$t[prop$h[j]], prop$t[j]), decreasing = T))
             }
           }
 
-          hastings <- hastings -
-            length(j2s) * log(data$p_move) - (length(kids) - length(j2s)) * log(1 - data$p_move) - # P(old -> new): Probability of choosing kids to move onto i
+
+          ## Hastings ratio
+          hastings <- -length(j2s) * log(data$p_move) - (length(kids) - length(j2s)) * log(1 - data$p_move) - # P(old -> new): Probability of choosing kids to move onto i
             ifelse(
               (!data$rooted & h == 1),
               dpois(dist, mcmc$a_g / mcmc$lambda_g, log = T),
@@ -861,6 +899,17 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
             log_p - # P(old -> new): probability of newly-created genotype for i
             log(sum(prop$h > data$n_obs, na.rm = T)) + # P(new -> old): pick a host with an unobserved ancestor
             log(mcmc$n - 1) # P(old -> new): pick a host with an ancestor
+
+          if(data$experimental){
+            # P(new to old): sample seq times for each j
+            for (j in js) {
+              hastings <- hastings + lfactorial(mcmc$w[j]) + mcmc$w[j]*log(1 / (mcmc$t[j] - mcmc$t[mcmc$h[j]]))
+            }
+            # P(old to new): sample seq times for each j and i
+            for (j in c(i, js)) {
+              hastings <- hastings - lfactorial(prop$w[j]) - prop$w[j]*log(1 / (prop$t[j] - prop$t[prop$h[j]]))
+            }
+          }
 
           update <- c(i, js)
           return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -899,6 +948,10 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
             prop <- shift_downstream(prop, data, j, i, h)
           }
         }else{
+          if(any(mcmc$t[j2s] < mcmc$t[j1])){
+            #print("bloop")
+            return(mcmc)
+          }
           for (j2 in j2s) {
             prop <- shift_upstream(prop, data, j2, i, j1)
           }
@@ -932,30 +985,19 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
         log_p <- genotype(mcmc, i, js, data$eps, comparison = T)
 
 
-
-        ## Hastings ratio
-        if(data$pooled_coalescent){
-          hastings <- 0
-        }else{
-          hastings <- 0
-          #Delta is change in number of hosts along edges into j2s
-          if(upstream){
-            delta <- mcmc$w[i] + 1
-            # In this case, we lose weight from the edges leading into the j2s, so:
-            hastings <- hastings  + # P(new -> old): delete the correct nodes from js[2], js[3], ...
-              lchoose(data$N, delta) * length(j2s)  # P(old -> new): add the correct nodes from the population onto each of the #[js] - 1 edges
-
-          }else{
-            delta <- mcmc$w[j1] + 1
-            hastings <- hastings - lchoose(data$N, delta) * length(j2s)  # P(new -> old): add the correct nodes from the population to each of js[2], js[3], ...
-            # P(old -> new): delete the correct nodes from js[2], js[3], ...
+        # Create seq for each j in js
+        if(data$experimental){
+          for (j in js) {
+            prop$seq[[j]] <- c(prop$t[j], sort(runif(prop$w[j], prop$t[prop$h[j]], prop$t[j]), decreasing = T))
           }
         }
+
+        ## Hastings ratio
 
         # In the case of unrooted trees and h==1, hastings ratio computed based on generations and time between i and j1
         dist <- mcmc$w[i]
 
-        hastings <- hastings +
+        hastings <-
           length(j2s) * log(data$p_move) + (length(kids) - length(j2s)) * log(1 - data$p_move) + # P(new -> old): Probability of choosing kids to move onto i
           ifelse(
             (!data$rooted & h == 1),
@@ -971,13 +1013,25 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           log(prop$n - 2) + # P(new -> old): pick a host with an ancestor (-2 because haven't yet updated n)
           log(sum(mcmc$h > data$n_obs, na.rm = T)) # P(old -> new): pick a host with an unobserved ancestor
 
-
+        if(data$experimental){
+          # P(new to old): sample seq times for each j and i
+          for (j in c(i, js)) {
+            hastings <- hastings + lfactorial(mcmc$w[j]) + mcmc$w[j]*log(1 / (mcmc$t[j] - mcmc$t[mcmc$h[j]]))
+          }
+          # P(old to new): sample seq times for each j
+          for (j in js) {
+            hastings <- hastings - lfactorial(prop$w[j]) - prop$w[j]*log(1 / (prop$t[j] - prop$t[prop$h[j]]))
+          }
+        }
 
         ## Re-indexing: everyone above i steps down 1, i gets deleted
         prop$h[which(prop$h > i)] <- prop$h[which(prop$h > i)] - 1
         prop$n <- prop$n - 1
         prop$h <- prop$h[-i]
         prop$w <- prop$w[-i]
+        if(data$experimental){
+          prop$seq <- prop$seq[-i]
+        }
         prop$t <- prop$t[-i]
         prop$m01 <- prop$m01[-i]
         prop$m10 <- prop$m10[-i]
@@ -996,53 +1050,7 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
 
         update <- js
         return(accept_or_reject(prop, mcmc, data, update, hastings))
-
       }
     }
   }
 }
-
-
-# If multiple children, randomize the order
-# if(length(js) > 1){
-#   js <- sample(js, length(js), replace = F)
-# }
-
-# How big could the weight of i possibly be?
-# max_dist <- mcmc$w[i] + min(mcmc$w[js])
-#
-# prop <- mcmc
-# prop$w[i] <- sample(0:max_dist, 1)
-# delta <- prop$w[i] - mcmc$w[i] # Change in weight
-# prop$w[js] <- mcmc$w[js] - delta
-#
-# # Now sample the time i contracts the disease as a beta centered at its new position
-# max_t <- min(mcmc$t[js])
-# prop$t[i] <- mcmc$t[h] + (max_t - mcmc$t[h]) * rbeta(1, prop$w[i] + 1, max_dist - prop$w[i] + 1)
-#
-# ## Hastings ratio
-# if(data$pooled_coalescent){
-#   hastings <- 0
-# }else{
-#   hastings <- 0
-#   if(length(js) > 1){
-#     if(delta > 0){
-#       # In this case, we lose weight from the edges leading into the js, so:
-#       hastings <- hastings - lchoose(data$N, delta) * (length(js) - 1)  # P(new -> old): add the correct nodes from the population onto each of the #[js] - 1 edges
-#          # P(old -> new): delete the correct nodes from js[2], js[3], ...
-#
-#     }
-#     if(delta < 0){
-#       hastings <- hastings + # P(new -> old): delete the correct nodes from js[2], js[3], ...
-#         lchoose(data$N, -delta) * (length(js) - 1)  # P(old -> new): add the correct nodes from the population to each of js[2], js[3], ...
-#     }
-#   }
-# }
-#
-#
-#
-# # Proposal density for the beta draw
-# hastings <- hastings + dbeta((mcmc$t[i] - mcmc$t[h]) / (max_t - mcmc$t[h]), mcmc$w[i] + 1, max_dist - mcmc$w[i] + 1, log = T) - # P(new -> old)
-#   dbeta((prop$t[i] - prop$t[h]) / (max_t - prop$t[h]), prop$w[i] + 1, max_dist - prop$w[i] + 1, log = T) # P(old -> new)
-
-

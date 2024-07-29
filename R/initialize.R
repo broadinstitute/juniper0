@@ -157,11 +157,10 @@ initialize <- function(
         }
       }
     }
-    s[1] <- 0
   }else{
     s <- date[,2][match(names, date[,1])]
-    s[1] <- 0
   }
+  s[1] <- a_s / lambda_s # Placeholder
 
 
   ## List of SNVs present per sample
@@ -429,7 +428,7 @@ initialize <- function(
     # Initialize time of infection
     ord <- rev(bfs(1, mcmc$h))
     mcmc$t <- rep(NA, n)
-    mcmc$t[1] <- -5
+    mcmc$t[1] <- 0
     for (i in ord) {
       mcmc$t[i] <- min(c(data$s[i] - 5, mcmc$t[which(mcmc$h == i)] - 5))
     }
@@ -471,17 +470,24 @@ initialize <- function(
   mcmc$a_s <- a_s # shape parameter of the sojourn interval
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   mcmc$mu <- init_mu
-  mcmc$p <- init_mu / 2
+  mcmc$p <- init_mu / 10
   mcmc$v <- 1000 # burst size
+  mcmc$v <- exp(1)
   mcmc$lambda <- 1 # expo growth rate of bursts
   mcmc$rho <- rho # first parameter, NBin offspring distribution (overdispersion param)
   # Mean number of cases at time t is R^(t/g) = exp(t * log(R) / g), g mean generation interval
   # growth = log(R) / g => R = exp(g * growth)
   mcmc$psi <- mcmc$rho / (data$R + mcmc$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
 
+  mcmc$w <- pmax(round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g))) - 1, 0)
+  mcmc$w[1] <- 0
+
   if(experimental){
     mcmc$R <- data$R
     mcmc$pi <- 0.2 # Probability of sampling
+
+    # Sequence of times at which the hosts along the edge leading into i were sampled
+    mcmc$seq <- lapply(1:n, get_ts, mcmc = mcmc)
 
     # Probability of extinction
     # if(mcmc$R <= 1){
@@ -508,8 +514,7 @@ initialize <- function(
   }
 
 
-  mcmc$w <- round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g)))
-  mcmc$w[1] <- 0
+
 
   # Functions of MCMC params
   mcmc$d <- sapply(1:n, function(x){sum(mcmc$h[2:n] == x)}) # Node degrees

@@ -25,16 +25,22 @@
 local_mcmc <- function(mcmc, data){
 
 
-  #set.seed(210)
+  #set.seed(1)
   res <- list()
 
-     # mcmc <- mcmcs[[j]]
-     # data <- datas[[j]]
-     # data$n_local <- 100
+  #mcmc <- mcmcs[[j]]
+  #data <- datas[[j]]
+  #data$n_local <- 100
 
   for (r in 1:data$n_local) {
+
+
+
     # Move 11
     mcmc <- moves$w(mcmc, data)
+    mcmc <- moves$seq(mcmc, data)
+
+
 
     # Move 12
     mcmc <- moves$t(mcmc, data)
@@ -42,6 +48,8 @@ local_mcmc <- function(mcmc, data){
     # Move 13
     mcmc <- moves$w_t(mcmc, data)
     mcmc <- moves$w_t(mcmc, data, recursive = T)
+
+
 
     # Move 14
     mcmc <- moves$h_step(mcmc, data)
@@ -60,6 +68,8 @@ local_mcmc <- function(mcmc, data){
 
     # Move 19
     mcmc <- moves$h_step(mcmc, data, upstream = F, resample_t = T, resample_w = T)
+
+
 
     # Move 20
     mcmc <- moves$h_global(mcmc, data)
@@ -86,7 +96,7 @@ local_mcmc <- function(mcmc, data){
     mcmc <- moves$create(mcmc, data, create = F, upstream = F)
 
 
-    #print(mcmc$d[mcmc$external_roots])
+
 
 
     # Append new results
