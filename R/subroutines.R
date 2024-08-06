@@ -608,7 +608,8 @@ shift_downstream <- function(mcmc, data, i, h_old, h_new, resample_t = FALSE, re
 }
 
 # Flip the genotype for a SNV
-flip_genotype <- function(prop, mcmc, i, js, snv){
+flip_genotype <- function(mcmc, i, js, snv){
+  prop <- mcmc
   ## Run through cases of updating genetic info in i
   if(snv %in% mcmc$m01[[i]]){
 
@@ -657,7 +658,24 @@ flip_genotype <- function(prop, mcmc, i, js, snv){
 
     add <- TRUE
   }else{
-    print("Something is wrong.")
+    # In the final case, we need to search the ancestry of i to determine whether the SNV is present or absent
+    h <- mcmc$h[i]
+    add <- T
+    while (h != 1) {
+      if(snv %in% c(unlist(mcmc$m01[[h]]), unlist(mcmc$mx1[[h]]))){
+        add <- F
+        break
+      }else{
+        h <- mcmc$h[h]
+      }
+    }
+    if(add){
+      # Union to 01 in i
+      prop$m01[[i]] <- union(mcmc$m01[[i]], snv)
+    }else{
+      # Union to 10 in i
+      prop$m10[[i]] <- union(mcmc$m10[[i]], snv)
+    }
   }
 
   ## Now update genetic info for j in js
@@ -697,18 +715,14 @@ flip_genotype <- function(prop, mcmc, i, js, snv){
 }
 
 ## Resample the genotype for an unobserved host, or for an observed host with missing sites, based on (approximate) parsimony
-genotype <- function(mcmc, i, js, eps, comparison = F){
-  # Get all SNVs that might need to change
-  snvs <- unique(c(
-    mcmc$mx0[[i]],
-    mcmc$m10[[i]],
-    mcmc$m01[[i]],
-    mcmc$mx1[[i]],
-    unlist(mcmc$m01[js]),
-    unlist(mcmc$m0y[js]),
-    unlist(mcmc$m10[js]),
-    unlist(mcmc$m1y[js])
-  ))
+genotype <- function(mcmc, data, i, js, comparison = F){
+  # Get all SNVs
+  snvs <- data$all_snv
+
+  # If i is observed, the only positions that can change are those with missing data
+  if(i <= data$n_obs){
+    snvs <- intersect(snvs, data$snvs[[i]]$missing$call)
+  }
 
   # Which ones go 0y or 1y in j, or x0 or x1 in i? (with multiplicity)
   isnvs <- c(
@@ -717,6 +731,11 @@ genotype <- function(mcmc, i, js, eps, comparison = F){
     unlist(mcmc$m0y[js]),
     unlist(mcmc$m1y[js])
   )
+  # Ensure these are valid mutations to flip
+  if(i <= data$n_obs){
+    isnvs <- isnvs[isnvs %in% snvs]
+  }
+
   tab_isnv <- table(isnvs)
   ind_isnv <- match(names(tab_isnv), snvs) # Indices of these iSNVs in "snvs"
 
@@ -727,6 +746,10 @@ genotype <- function(mcmc, i, js, eps, comparison = F){
     unlist(mcmc$m01[js]),
     unlist(mcmc$m10[js])
   )
+  # Ensure these are valid mutations to flip
+  if(i <= data$n_obs){
+    non_isnvs <- non_isnvs[non_isnvs %in% snvs]
+  }
   tab_non_isnv <- table(non_isnvs)
   ind_non_isnv <- match(names(tab_non_isnv), snvs) # Indices of these SNVs in "snvs"
 
@@ -736,18 +759,12 @@ genotype <- function(mcmc, i, js, eps, comparison = F){
   probs[ind_isnv] <- probs[ind_isnv] + unname(tab_isnv)/2
   probs <- probs / (length(js) + 1)
 
-  if(comparison){
-    # Anything with a probability of 0 or 1 won't be considered when creating a new node i
-    delete <- which((probs == 0 | probs == 1))
-    probs <- probs[-delete]
-  }
-
   # By parsimony, round probability
   probs[probs < 0.5] <- 0
   probs[probs > 0.5] <- 1
 
   # Add random noise
-  probs <- (eps/2) + (1 - eps)*probs
+  probs <- (data$eps/2) + (1 - data$eps)*probs
 
   # If our goal is to compute the probability that a new host i has this genotype...
   if(comparison){
@@ -755,14 +772,14 @@ genotype <- function(mcmc, i, js, eps, comparison = F){
     return(sum(log(1-probs)))
   }else{
     # Which ones get swapped?
-    which_swap <- which(runif(length(snvs)) < probs)
+    which_swap <- runif(length(snvs)) < probs
     swaps <- snvs[which_swap]
 
     # Log probability of picking this genotype
-    log_p <- sum(log(probs[which_swap])) + sum(log(1 - probs[-which_swap]))
+    log_p <- sum(log(probs[which_swap])) + sum(log(1 - probs[!which_swap]))
 
     for (snv in swaps) {
-      mcmc <- flip_genotype(mcmc, mcmc, i, js, snv)
+      mcmc <- flip_genotype(mcmc, i, js, snv)
     }
 
     return(list(mcmc, log_p))

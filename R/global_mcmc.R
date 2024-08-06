@@ -39,7 +39,7 @@ global_mcmc <- function(mcmc, data){
   if(data$experimental){
     #print("hi")
     mcmc <- moves$pi(mcmc, data)
-    #mcmc <- moves$R(mcmc, data)
+    mcmc <- moves$R(mcmc, data)
   }
 
   # Move 8

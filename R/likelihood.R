@@ -50,96 +50,6 @@ e_lik <- function(mcmc, data){
         return(-Inf)
       }
 
-      # # Estimate of times of infection for all hosts (tracked and untracked), for correction term
-      # # ts <- unlist(lapply(who, get_ts, mcmc = mcmc))
-      # ts <- unlist(mcmc$seq[who])
-      # #print(ts)
-      #
-      # #print(mcmc$seq)
-      # # All generation intervals
-      # gens <- unlist(lapply(who, function(i){
-      #   if(length(mcmc$seq[[i]]) == 1){
-      #     mcmc$t[i] - mcmc$t[mcmc$h[i]]
-      #   }else{
-      #     mcmc$seq[[i]] - c(mcmc$seq[[i]][2:length(mcmc$seq[[i]])], mcmc$t[mcmc$h[i]])
-      #   }
-      # }))
-      # #print(gens)
-      #
-      # # Whether each person is observed
-      # obss <- unlist(lapply(who, get_obs, mcmc = mcmc, data = data))
-      #
-      # # Degrees of all hosts
-      # ds <- unlist(lapply(who, function(i, mcmc){c(mcmc$d[i], rep(1, mcmc$w[i]))}, mcmc=mcmc))
-      #
-      # # Include degree of root
-      # if(data$rooted){
-      #   ds <- c(mcmc$d[1], ds)
-      #   ts <- c(mcmc$t[1], ts)
-      #   obss <- c(TRUE, obss)
-      # }else{
-      #   ds <- c(mcmc$d[which(mcmc$h == 1)], ds)
-      #   ts <- c(mcmc$t[which(mcmc$h == 1)], ts)
-      #   obss <- c(TRUE, obss)
-      # }
-      #
-      # ## New xi-coalescent
-      #
-      # # Maximum time of infection
-      # t_max <- max(data$s, na.rm = T)
-      #
-      # # Minimum time of infection
-      # if(data$rooted){
-      #   t_min <- min(mcmc$t)
-      # }else{
-      #   t_min <- min(mcmc$t[2:mcmc$n])
-      # }
-      #
-      # # Compute w_t bar in TransPhylo
-      # t_step <- (t_max - t_min) / 100 # resolution in days. Gives length of output = 1000
-      #
-      # if(is.infinite(mcmc$rho)){
-      #   # Poisson case
-      #   #wbars_seq <- wbar(t_min, t_max, mcmc$R, 0, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, t_step, TRUE)  # Note, log scale
-      #   stop("Probability of transmission tree in Poisson case not yet implemented")
-      # }else{
-      #   wbars_seq <- wbar(t_min, t_max, mcmc$rho, 1- mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, t_step)  # Note, log scale
-      # }
-      #
-      # wbars <- exp(wbars_seq[floor(((ts - t_min) / (t_max - t_min)) * 100) + 1])
-      #
-      # #print(exp(wbars_seq))
-      # #print(ts)
-      # #print(t_max)
-      # #print(t_min)
-      # #print(wbars)
-      # # lwbars <- log(wbars)
-      # #
-      # # new_alphas <- c()
-      # # for (i in 1:length(lwbars)) {
-      # #   new_alphas[i] <- alpha(ds[i], 1- mcmc$psi, mcmc$rho, lwbars[i])
-      # # }
-      #
-      # # Equation 10 in TransPhylo, using closed form solution in NBin and Poisson cases
-      # if(is.infinite(mcmc$rho)){
-      #   # Poisson case
-      #   alphas <- ds * log(mcmc$R) + mcmc$R * (wbars - 1) - lfactorial(ds)
-      # }else{
-      #   # Negative Binomial case
-      #   alphas <- (-ds - mcmc$rho) * log(1 + wbars * (-1 + mcmc$psi)) + ds * log(1 - mcmc$psi) + mcmc$rho * log(mcmc$psi) + lgamma(ds + mcmc$rho) - lgamma(mcmc$rho) - lgamma(ds + 1)
-      # }
-      #
-      #
-      # # Probability of being sampled before t_max
-      # p_samp_before_t_max <- pgamma((t_max - ts)[!obss], shape = mcmc$a_s, rate = mcmc$lambda_s)
-      #
-      # ### New approach: simply use TransPhylo's probTTree
-      #
-      #
-      # # First, need to make transmission matrix input
-      # # 1st column is time of infection
-      # # 2nd column is time of sampling. NA if unsampled
-      # # 3rd column is ancestor. Root node has ancestor 0. Case i is row i using R indexing
       t_max <- max(data$s, na.rm = T)
 
       ids <- c()
@@ -162,84 +72,17 @@ e_lik <- function(mcmc, data){
       #ids[ids] <- ids
       t_samp <- c(data$s[1:data$n_obs], rep(NA, mcmc$n - data$n_obs + sum(mcmc$w)))
 
-      # if(length(hs) != length(t_inf) | length(t_inf) != length(t_samp)){
-      #   print("warning")
-      # }
-
       ttree <- matrix(c(t_inf, t_samp, hs), ncol = 3, byrow = F)
       ttree[1, 3] <- 0 # Ancestor of person 1 designated as 0
 
+      for (i in 2:nrow(ttree)) {
+        print(ttree[i, 1] - ttree[ttree[i,3], 1])
+      }
 
-
-
-
-
-
-
-      # # Need to assign designators to every additional case in seq
-      # counter <- mcmc$n # number of cases that have been assigned a label so far
-      # for (i in 1:mcmc$n) {
-      #   if(i == 1){
-      #     ttree[i, ] <- c(mcmc$t[i], data$s[i], 0)
-      #   }else if(mcmc$w[i] == 0){
-      #     if(i <= data$n_obs){
-      #       t_samp <- data$s[i]
-      #     }else{
-      #       t_samp <- NA
-      #     }
-      #     ttree[i, ] <- c(mcmc$t[i], t_samp, mcmc$h[i])
-      #   }else{
-      #
-      #     # IDs of cases
-      #     ids <- c(i, (counter+1):(counter+mcmc$w[i]))
-      #     counter <- counter + mcmc$w[i]
-      #
-      #     # Times of infection
-      #     t_inf <- mcmc$seq[[i]]
-      #
-      #     # Times of sampling
-      #     t_samp <- rep(NA, mcmc$w[i] + 1)
-      #     if(i <= data$n_obs){
-      #       t_samp[1] <- data$s[i]
-      #     }
-      #
-      #     # Ancestors
-      #     anc <- c(ids[2:length(ids)], mcmc$h[i])
-      #
-      #     ttree[ids, 1] <- t_inf
-      #     ttree[ids, 2] <- t_samp
-      #     ttree[ids, 3] <- anc
-      #   }
-      # }
-
-
-
-
-
-
-
-
-      # Equation 11 in TransPhylo
       return(
-
-        # # Sampling of included network
-        # data$n_obs*log(mcmc$pi) + sum(log(1 - mcmc$pi * p_samp_before_t_max)) +
-        #
-        #   # Generation intervals
-        #   sum(dgamma(gens, shape = mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
-        #
-        #   # Sojourn intervals
-        #   sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
-        #
-        #   # xi-coalescent
-        #   sum(alphas)
-
-
         probTTree(
           ttree, mcmc$rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$a_s, t_max, delta_t = 0.1
         )
-
-
       )
 
     }else{

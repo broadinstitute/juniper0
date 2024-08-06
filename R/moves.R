@@ -167,7 +167,7 @@ moves$w_t <- function(mcmc, data, recursive = F){
     if(recursive){
       sd <- (max_t - mcmc$t[i]) / 5
     }else{
-      sd <- (max_t - mcmc$t[i]) / 10
+      sd <- (max_t - min_t) / 10
     }
 
     # Make the proposal of the change in time and generation
@@ -388,48 +388,32 @@ moves$psi <- function(mcmc, data){
   }
 }
 
-## Update genotype at (a) missing sites in observed host, or (b) all sites in unobserved host
-#### May need to check hastings ratio here...
+## Update genotype at (a) missing sites in observed host, or (b) all sites in unobserved host, based on parsimony
 moves$genotype <- function(mcmc, data){
 
   # Choose random host with ancestor
   i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
   js <- which(mcmc$h == i) # Children
-  # Let h denote the ancestor of i; never used in computations
 
-  # Get a list of "SNVs of interest": sites that change going from h to i, or i to a child of i
-  interest <- unique(c(
-    mcmc$m01[[i]],
-    mcmc$mx1[[i]],
-    unlist(mcmc$m10[js]),
-    unlist(mcmc$m1y[js]),
-    mcmc$m10[[i]],
-    mcmc$mx0[[i]],
-    unlist(mcmc$m01[js]),
-    unlist(mcmc$m0y[js])
-  ))
 
-  # If i is observed, we can only change sites with missing data
-  if(i <= data$n_obs){
-    interest <- intersect(interest, data$snvs[[i]]$missing$call)
-  }
+  # Proposal
+  prop <- mcmc
 
-  if(length(interest) == 0){
-    return(mcmc)
-  }else{
+  # Create new genotype for i
+  geno <- genotype(prop, data, i, js)
+  prop <- geno[[1]]
+  log_p <- geno[[2]] # Probability of choosing the new genotype
 
-    # Proposal
-    prop <- mcmc
+  old_log_p <- genotype(mcmc, data, i, js, comparison = T)
 
-    # Pick one SNV to update. We switch whether it exists or not in i.
-    snv <- ifelse(length(interest) == 1, interest, sample(interest, 1))
+  update <- c(i, js) # For which hosts must we update the genomic likelihood?
 
-    prop <- flip_genotype(prop, mcmc, i, js, snv)
+  # Hastings ratio
+  hastings <- old_log_p - log_p
 
-    update <- c(i, js) # For which hosts must we update the genomic likelihood?
-    return(accept_or_reject(prop, mcmc, data, update, hastings))
+  return(accept_or_reject(prop, mcmc, data, update, hastings))
 
-  }
+
 }
 
 ### Topological moves
@@ -475,17 +459,17 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
 
       prop <- shift_upstream(prop, data, i, h_old, h_new, resample_t, resample_w)
 
-      # What's the change in edge weight for i?
-      change <- prop$w[i] - mcmc$w[i]
-
-
-
       # Update seq for i
       if(prop$w[i] < 0 | prop$t[i] <= prop$t[prop$h[i]]){
         return(mcmc)
       }
 
       #print(prop$w[i])
+
+      ## TRYING SOMETHING NEW: No resampling of w
+      if(!resample_w){
+        prop$w <- mcmc$w
+      }
 
       if(data$experimental){
         prop$seq[[i]] <- c(
@@ -538,9 +522,6 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
 
       prop <- shift_downstream(prop, data, i, h_old, h_new, resample_t, resample_w)
 
-      # What's the change in edge weight for i? (Positive)
-      change <- mcmc$w[h_old] + 1
-
       ## Compute the number of possible children who could be chosen by i in the new config
       # Who are the other children of h_old?
       children <- setdiff(which(prop$h == h_new), i)
@@ -561,6 +542,12 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
       if(prop$w[i] < 0 | prop$t[i] <= prop$t[prop$h[i]]){
         return(mcmc)
       }
+
+      ## TRYING SOMETHING NEW: No resampling of w
+      if(!resample_w){
+        prop$w <- mcmc$w
+      }
+
       if(data$experimental){
         prop$seq[[i]] <- c(
           prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
@@ -649,11 +636,12 @@ moves$h_global <- function(mcmc, data){
       }
     }
 
+    ## TRYING SOMETHING NEW! No update of w
+    prop$w[i] <- mcmc$w[i]
+
     if(prop$w[i] < 0){
       return(mcmc)
     }
-
-
 
     update <- i
 
@@ -664,8 +652,6 @@ moves$h_global <- function(mcmc, data){
     prop$seq[[i]] <- c(
       prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
     )
-
-
 
     hastings <- hastings +
       # P(new to old): draw the seq values in mcmc
@@ -738,7 +724,7 @@ moves$swap <- function(mcmc, data, exchange_children = FALSE){
       update <- c(i, j, children_i, children_j) # For which hosts must we update the genomic likelihood?
       hastings <- 0
 
-      if(any(prop$t[update] < prop$t[prop$h[update]]) | any(prop$w[update] < 0)){
+      if(any(prop$t[update] <= prop$t[prop$h[update]]) | any(prop$w[update] < 0)){
         return(mcmc)
       }
 
@@ -872,7 +858,7 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           }
 
           ## Create new genotype for i
-          geno <- genotype(prop, i, js, data$eps)
+          geno <- genotype(prop, data, i, js)
           prop <- geno[[1]]
           log_p <- geno[[2]]
 
@@ -982,7 +968,7 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
         }
 
         # Probability that genotype() returns the genotype of i in mcmc
-        log_p <- genotype(mcmc, i, js, data$eps, comparison = T)
+        log_p <- genotype(mcmc, data, i, js, comparison = T)
 
 
         # Create seq for each j in js

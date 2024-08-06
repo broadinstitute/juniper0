@@ -151,6 +151,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
     print(mcmc$w)
 
+    #hist((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$w + 1))
+
     print(sum(mcmc$w) + mcmc$n)
 
     #print(sum(mcmc$w))

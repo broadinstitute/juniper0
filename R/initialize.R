@@ -310,7 +310,6 @@ initialize <- function(
   data$n_obs <- n # number of observed hosts, plus 1 (index case)
   data$n_bases <- n_bases
   data$snvs <- snvs
-  data$eps <- 0.005 # Explore/exploit tradeoff for genotypes of new nodes
   data$p_move <- 0.6
   data$tau = 0.2
   #data$n_cores <-
@@ -330,6 +329,9 @@ initialize <- function(
   data$fixed_mu <- fixed_mu
   data$names <- names
 
+  data$all_snv <- unique(all_snv)
+  data$eps <- 0.05 / length(data$all_snv) # When creating a new genotype, algo makes 0.05 explorations per snv
+
   # Later: could move elements of "data" that aren't used in MCMC to a new "config" list
 
   # Old feature from previous version
@@ -345,7 +347,7 @@ initialize <- function(
   # mcmc$w[1] <- 0 # For convenience
   mcmc$h[1] <- NA
   mcmc$t <- s - 5 # time of contracting
-  mcmc$t[2:n] <- pmax(mcmc$t[2:n], -3.5)
+  mcmc$t[2:n] <- pmax(mcmc$t[2:n], 0.01)
   mcmc$m01 <- list() # fixed mutations added in each transmission link
   mcmc$m10 <- list() # fixed mutations deleted in each transmission link
   mcmc$m0y <- list() # 0% -> y%, 0 < y < 100
