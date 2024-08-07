@@ -714,74 +714,328 @@ flip_genotype <- function(mcmc, i, js, snv){
   return(prop)
 }
 
+# Change the genotype
+change_genotype <- function(mcmc, data, snv, from, to, i, js, is_observed){
+  if(from != to){
+    # Figure out whether the snv is absent, present, or isnv in h[i]
+    if(snv %in% c(mcmc$m01[[i]], mcmc$m0y[[i]])){
+      old_state_anc <- "0"
+    }else if(snv %in% c(mcmc$mx0[[i]], mcmc$mxy[[i]], mcmc$mx1[[i]])){
+      old_state_anc <- "x"
+    }else if(snv %in% c(mcmc$m10[[i]], mcmc$m1y[[i]])){
+      old_state_anc <- "1"
+    }else if(from == "absent"){
+      old_state_anc <- "0"
+    }else if(from == "present"){
+      old_state_anc <- "1"
+    }else{
+      stop("Error!!!")
+    }
+
+    # Figure out whether the snv is absent, present, or isnv in each j
+    old_state_kids <- c()
+    for (j in 1:length(js)) {
+      if(snv %in% c(mcmc$mx0[[js[j]]], mcmc$m10[[js[j]]])){
+        old_state_kids[j] <- "0"
+      }else if(snv %in% c(mcmc$m0y[[js[j]]], mcmc$mxy[[js[j]]], mcmc$m1y[[js[j]]])){
+        old_state_kids[j] <- "y"
+      }else if(snv %in% c(mcmc$m01[[js[j]]], mcmc$mx1[[js[j]]])){
+        old_state_kids[j] <- "1"
+      }else if(from == "absent"){
+        old_state_kids[j] <- "0"
+      }else if(from == "present"){
+        old_state_kids[j] <- "1"
+      }else{
+        stop("Error!!!!!!")
+      }
+    }
+
+    # From which list do we delete in i and js?
+    if(from == "absent"){
+      delete_i <- paste0("m", old_state_anc, "0")
+      delete_js <- paste0("m", "0", old_state_kids)
+    }else if(from == "isnv"){
+      delete_i <- paste0("m", old_state_anc, "y")
+      delete_js <- paste0("m", "x", old_state_kids)
+    }else if(from == "present"){
+      delete_i <- paste0("m", old_state_anc, "1")
+      delete_js <- paste0("m", "1", old_state_kids)
+    }
+
+    # To which list do we add in i and js?
+    if(to == "absent"){
+      add_i <- paste0("m", old_state_anc, "0")
+      add_js <- paste0("m", "0", old_state_kids)
+    }else if(to == "isnv"){
+      add_i <- paste0("m", old_state_anc, "y")
+      add_js <- paste0("m", "x", old_state_kids)
+    }else if(to == "present"){
+      add_i <- paste0("m", old_state_anc, "1")
+      add_js <- paste0("m", "1", old_state_kids)
+    }
+
+    # Modify the lists
+    if(!is.null(mcmc[[delete_i]])){
+      mcmc[[delete_i]][[i]] <- setdiff(mcmc[[delete_i]][[i]], snv)
+    }
+    if(!is.null(mcmc[[add_i]])){
+      mcmc[[add_i]][[i]] <- union(mcmc[[add_i]][[i]], snv)
+    }
+
+    for (j in 1:length(js)) {
+      if(!is.null(mcmc[[delete_js[j]]])){
+        mcmc[[delete_js[j]]][[js[j]]] <- setdiff(mcmc[[delete_js[j]]][[js[j]]], snv)
+      }
+      if(!is.null(mcmc[[add_js[j]]])){
+        mcmc[[add_js[j]]][[js[j]]] <- union(mcmc[[add_js[j]]][[js[j]]], snv)
+      }
+    }
+  }
+
+  # If from == "isnv", need to delete this isnv from mcmc$isnv
+  if(from == "isnv"){
+    # Index of isnv on mcmc$isnv
+    ind <- match(snv, mcmc$isnv$call[[i]])
+    mcmc$isnv$call[[i]] <- mcmc$isnv$call[[i]][-ind]
+    mcmc$isnv$af[[i]] <- mcmc$isnv$af[[i]][-ind]
+  }
+
+  # Similarly, if to == "isnv", need to add to the list, AND pick its frequency
+  if(to == "isnv"){
+    mcmc$isnv$call[[i]] <- c(mcmc$isnv$call[[i]], snv)
+
+    if(is_observed){
+      if(data$vcf_present[i]){
+        if(from == "absent"){
+          mcmc$isnv$af[[i]] <- c(mcmc$isnv$af[[i]], runif(1, 0, data$filters$af))
+        }else if(from == "present"){
+          mcmc$isnv$af[[i]] <- c(mcmc$isnv$af[[i]], runif(1, 1 - data$filters$af, 1))
+        }
+        log_p <- log(1 / data$filters$af)
+      }else{
+        if(from == "absent"){
+          mcmc$isnv$af[[i]] <- c(mcmc$isnv$af[[i]], runif(1, 0, 1/2))
+        }else if(from == "present"){
+          mcmc$isnv$af[[i]] <- c(mcmc$isnv$af[[i]], runif(1, 1/2, 1))
+        }
+        log_p <- log(2) # log(1 / 0.5)
+      }
+    }else{
+      mcmc$isnv$af[[i]] <- c(mcmc$isnv$af[[i]], runif(1))
+      log_p <- 0 # log(1)
+    }
+  }
+
+  return(list(mcmc, log_p))
+}
+
+## Is a snv absent, isnv, or present in a host i with children js?
+snv_status <- function(mcmc, i, js, snv){
+  if(snv %in% c(
+    mcmc$m0y[[i]],
+    mcmc$mxy[[i]],
+    mcmc$m1y[[i]]
+  )){
+    from <- "isnv"
+  }else if(snv %in% c(
+    mcmc$mx0[[i]],
+    mcmc$m10[[i]],
+    unlist(mcmc$m0y[js]),
+    unlist(mcmc$m01[js])
+  )){
+    from <- "absent"
+  }else if(snv %in% c(
+    mcmc$mx1[[i]],
+    mcmc$m01[[i]],
+    unlist(mcmc$m1y[js]),
+    unlist(mcmc$m10[js])
+  )){
+    from <- "present"
+  }else{
+    # In this case, we need to trace the ancestry until we find the most recent m01 or m10
+    from <- "absent"
+    h <- mcmc$h[i]
+    while (!is.na(h)) {
+      if(snv %in% c(unlist(mcmc$m01[[h]]), unlist(mcmc$mx1[[h]]))){
+        from <- "present"
+        break
+      }else{
+        h <- mcmc$h[h]
+      }
+    }
+  }
+  return(from)
+}
+
 ## Resample the genotype for an unobserved host, or for an observed host with missing sites, based on (approximate) parsimony
 genotype <- function(mcmc, data, i, js, comparison = F){
   # Get all SNVs
   snvs <- data$all_snv
 
-  # If i is observed, the only positions that can change are those with missing data
+  # If i is observed, the only positions that can change are those without known iSNVs (hence data$isnv not mcmc$isnv)
   if(i <= data$n_obs){
-    snvs <- intersect(snvs, data$snvs[[i]]$missing$call)
+    snvs <- setdiff(snvs, data$snvs[[i]]$isnv$call)
   }
 
-  # Which ones go 0y or 1y in j, or x0 or x1 in i? (with multiplicity)
-  isnvs <- c(
-    mcmc$mx0[[i]],
-    mcmc$mx1[[i]],
-    unlist(mcmc$m0y[js]),
-    unlist(mcmc$m1y[js])
-  )
-  # Ensure these are valid mutations to flip
+  # When VCF is present, observed sites may only change up to the LOD
+  # When not, observed sites may change up to consensus threshhold (50%)
   if(i <= data$n_obs){
-    isnvs <- isnvs[isnvs %in% snvs]
-  }
-
-  tab_isnv <- table(isnvs)
-  ind_isnv <- match(names(tab_isnv), snvs) # Indices of these iSNVs in "snvs"
-
-  # And the others?
-  non_isnvs <- c(
-    mcmc$m10[[i]],
-    mcmc$m01[[i]],
-    unlist(mcmc$m01[js]),
-    unlist(mcmc$m10[js])
-  )
-  # Ensure these are valid mutations to flip
-  if(i <= data$n_obs){
-    non_isnvs <- non_isnvs[non_isnvs %in% snvs]
-  }
-  tab_non_isnv <- table(non_isnvs)
-  ind_non_isnv <- match(names(tab_non_isnv), snvs) # Indices of these SNVs in "snvs"
-
-  # Probability of swapping
-  probs <- rep(0, length(snvs))
-  probs[ind_non_isnv] <- probs[ind_non_isnv] + unname(tab_non_isnv)
-  probs[ind_isnv] <- probs[ind_isnv] + unname(tab_isnv)/2
-  probs <- probs / (length(js) + 1)
-
-  # By parsimony, round probability
-  probs[probs < 0.5] <- 0
-  probs[probs > 0.5] <- 1
-
-  # Add random noise
-  probs <- (data$eps/2) + (1 - data$eps)*probs
-
-  # If our goal is to compute the probability that a new host i has this genotype...
-  if(comparison){
-    # The probability of creating a new genotype at i equal to that in MCMC is the probability we don't swap anything in i
-    return(sum(log(1-probs)))
+    observed <- setdiff(snvs, data$snvs[[i]]$missing$call)
   }else{
-    # Which ones get swapped?
-    which_swap <- runif(length(snvs)) < probs
-    swaps <- snvs[which_swap]
+    observed <- character(0)
+  }
 
-    # Log probability of picking this genotype
-    log_p <- sum(log(probs[which_swap])) + sum(log(1 - probs[!which_swap]))
 
-    for (snv in swaps) {
-      mcmc <- flip_genotype(mcmc, i, js, snv)
+  # Number of neighbors (h[i] and js)
+  n_neighbors <- 1 + length(js)
+
+  ## Loop over snvs
+
+  if(comparison){
+    log_p_compare <- 0
+  }else{
+    log_p <- 0 # Probability associated with making the change
+  }
+
+  for (snv in snvs) {
+
+    ## Step 1: figure out if the snv is absent, isnv, or present in i
+    from <- snv_status(mcmc, i, js, snv)
+
+    ## Step 2: Figure out the "ideal" (most parsimonious) state of the snv
+    if(from == "absent"){
+      # How many times does snv appear as present in neighbors?
+      n_present <- sum(
+        c(mcmc$m10[[i]], unlist(mcmc$m01[js])) == snv
+      )
+
+      # How many times does snv appear as iSNV in neighbors?
+      n_isnv <- sum(
+        c(mcmc$mx0[[i]], unlist(mcmc$m0y[js])) == snv
+      )
     }
 
+    if(from == "isnv"){
+      # How many times does snv appear as present in neighbors?
+      n_present <- sum(
+        c(mcmc$m1y[[i]], unlist(mcmc$mx1[js])) == snv
+      )
+
+      # How many times does snv appear as iSNV in neighbors?
+      n_isnv <- sum(
+        c(mcmc$mxy[[i]], unlist(mcmc$mxy[js])) == snv
+      )
+    }
+
+    if(from == "present"){
+      # How many times does snv appear as ABSENT in neighbors?
+      n_absent <- sum(
+        c(mcmc$m01[[i]], unlist(mcmc$m10[js])) == snv
+      )
+
+      # How many times does snv appear as iSNV in neighbors?
+      n_isnv <- sum(
+        c(mcmc$mx1[[i]], unlist(mcmc$m1y[js])) == snv
+      )
+
+      n_present <- n_neighbors - n_absent - n_isnv
+    }
+
+    if(n_present >= n_neighbors - 1){
+      # All go 0 to 1
+      # All but 1 go 0 to 1, other 0 to 0
+      # All but 1 go 0 to 1, other 0 to iSNV
+      ideal <- "present"
+    }else if(n_present + n_isnv >= 2){
+      ideal <- "isnv"
+    }else{
+      # All go 0 to 0
+      # All but one go 0 to 0, one goes 0 to 1
+      # All but one go 0 to 0, one goes 0 to iSNV
+      ideal <- "absent"
+    }
+
+    ## Step 3: figure out all alternative options for "to"
+    # If observed, there's always one alternative (avoid consensus change)
+    # If unobserved, there's always two alternatives
+    options <- c("absent", "isnv", "present")
+
+    if(from == "absent"){
+      if(snv %in% observed){
+        options <- c("absent", "isnv")
+        if(ideal == "present"){
+          ideal <- "isnv"
+        }
+      }
+    }
+
+    if(from == "isnv"){
+      if(snv %in% observed){
+        # Need to figure out whether we're closer to present or absent
+        af <- mcmc$isnv$af[match(snv, mcmc$isnv$call)]
+        if(af < 0.5){
+          options <- c("absent", "isnv")
+          if(ideal == "present"){
+            ideal <- "isnv"
+          }
+        }else{
+          options <- c("isnv", "present")
+          if(ideal == "absent"){
+            ideal <- "isnv"
+          }
+        }
+      }
+    }
+
+    if(from == "present"){
+      if(snv %in% observed){
+        options <- c("isnv", "present")
+        if(ideal == "absent"){
+          ideal <- "isnv"
+        }
+      }
+    }
+
+    # Suppose our goal is to compute the probability that a randomly-generated genotype for i has the genotype in mcmc
+    # Then if the current genotype ("from") equals the ideal genotype, this contributes a factor of 1-eps, and if not, it's eps/length(options)
+    # Then if "from" is an iSNV: if observed AND vcf present, contributes a factor of 1/filters$af
+    # If observed but NOT vcf present, contributes a factor of 1/0.5
+    # Else contributes a factor of 1
+    if(comparison){
+      if("from" == "ideal"){
+        log_p_compare <- log_p_compare + log(1 - data$eps)
+      }else{
+        log_p_compare <- log_p_compare + log(data$eps / length(options))
+      }
+
+      if("from" == "isnv"){
+        if(snv %in% observed){
+          if(data$vcf_present[i]){
+            log_p_compare <- log_p_compare + log(1 / data$filters$af)
+          }else{
+            log_p_compare <- log_p_compare + log(2)
+          }
+        }
+      }
+    }else{
+      # Otherwise, the point of this function is to generate a new genotype for i
+      # First: do we pick the ideal genome?
+      if(runif(1) > data$eps){
+        new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
+        mcmc <- new[[1]]
+        log_p <- log_p + new[[2]] + log(1-data$eps)
+      }else{
+        to <- sample(setdiff(options, from), 1)
+        new <- change_genotype(mcmc, data, snv, from, to, i, js, snv %in% observed)
+        mcmc <- new[[1]]
+        log_p <- log_p + new[[2]] + log(data$eps) + log(1 / (length(options) - 1))
+      }
+    }
+  }
+
+  if(comparison){
+    return(log_p_comarison)
+  }else{
     return(list(mcmc, log_p))
   }
 }

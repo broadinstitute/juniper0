@@ -491,28 +491,17 @@ initialize <- function(
     # Sequence of times at which the hosts along the edge leading into i were sampled
     mcmc$seq <- lapply(1:n, get_ts, mcmc = mcmc)
 
-    # Probability of extinction
-    # if(mcmc$R <= 1){
-    #   mcmc$p_extinct <- 1
-    # }else{
-    #   if(is.infinite(mcmc$rho)){
-    #     # Poisson case
-    #     mcmc$p_extinct = nlm(
-    #       f = function(x){
-    #         (x - exp(data$R * (x - 1)))^2
-    #       },
-    #       p = 0
-    #     )$estimate
-    #   }else{
-    #     # Negative Binomial case
-    #     mcmc$p_extinct = nlm(
-    #       f = function(x){
-    #         (x - (mcmc$psi/(1 - (1 - mcmc$psi)*x))^mcmc$rho)^2
-    #       },
-    #       p = 0
-    #     )$estimate
-    #   }
-    # }
+    # Inferred iSNVs and their frequencies
+    mcmc$isnv <- list()
+    mcmc$isnv$call <- list()
+    mcmc$isnv$af <- list()
+
+    for (i in 1:n) {
+      mcmc$isnv$call[[i]] <- data$snvs[[i]]$isnv$call
+      mcmc$isnv$af[[i]] <- data$snvs[[i]]$isnv$af
+    }
+
+
   }
 
 
