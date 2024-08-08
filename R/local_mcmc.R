@@ -49,8 +49,6 @@ local_mcmc <- function(mcmc, data){
     mcmc <- moves$w_t(mcmc, data)
     mcmc <- moves$w_t(mcmc, data, recursive = T)
 
-
-
     # Move 14
     mcmc <- moves$h_step(mcmc, data)
 
@@ -68,8 +66,6 @@ local_mcmc <- function(mcmc, data){
 
     # Move 19
     mcmc <- moves$h_step(mcmc, data, upstream = F, resample_t = T, resample_w = T)
-
-
 
     # Move 20
     mcmc <- moves$h_global(mcmc, data)

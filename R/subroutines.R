@@ -374,6 +374,90 @@ evolveJC <- function(init, mu, delta_t){
   1/4 + (init - 1/4)*exp(-(4*mu/3) * delta_t)
 }
 
+# Get initial bottleneck, given composition in the form (fraction of absent particles, fraction of present particles)
+init_bot <- function(init_absent, init_present, mu, b, delta_t){
+  init <- c(init_absent, init_present)
+  # Evolve composition forward
+  if(delta_t > 0){
+    init <- evolveJC(init, mu, delta_t)
+  }
+
+  return(c(
+    (1-b) * init[1] + b * init[1]^2,
+    b * 2 * init[1] * init[2],
+    (1-b) * init[2] + b * init[2]^2
+  ))
+}
+
+# Evolve P(absent, isnv, present) from bottleneck to bottleneck
+evolve_bot <- function(bot, mu, b, delta_t){
+  # If the SNV starts as absent, what fraction of particles are still absent, and what fraction are present?
+  probs_start_absent <- evolveJC(c(1,0), mu, delta_t)
+
+  # If the SNV starts as present, what fraction of particles have the absent type, and what fraction are present?
+  probs_start_present <- evolveJC(c(0,1), mu, delta_t)
+
+  # Limitation: not accounting for types other than present/absent going thru bottleneck; hence, probabilities won't sum to 1
+
+  # Probability absent at next bottleneck
+  p_absent <-
+    # Absent to absent
+    bot[1] * ((1-b) * probs_start_absent[1] + b * probs_start_absent[1]^2) +
+    # iSNV to absent
+    bot[2] / 3 +
+    # Present to absent
+    bot[3] * ((1-b) * probs_start_present[1] + b * probs_start_present[1]^2)
+
+  # Probability iSNV at next bottleneck
+  p_isnv <-
+    # Absent to iSNV
+    bot[1] * b * 2 * probs_start_absent[1] * probs_start_absent[2] +
+    # iSNV to iSNV
+    bot[2] / 3 +
+    # Present to iSNV
+    bot[3] * b * 2 * probs_start_present[1] * probs_start_present[2]
+
+  # Probability present at next bottleneck
+  p_present <-
+    # Absent to present
+    bot[1] * ((1-b) * probs_start_absent[2] + b * probs_start_absent[2]^2) +
+    # Absent to iSNV
+    bot[2] / 3 +
+    # Present to present
+    bot[3] * ((1-b) * probs_start_present[2] + b * probs_start_present[2]^2)
+
+  return(c(p_absent, p_isnv, p_present))
+}
+
+# Evolve P(absent, isnv, present) from bottleneck to bottleneck, repeatedly for a transmission chain
+evolve_bot_repeatedly <- function(bot, mu, b, deltas){
+  if(length(deltas) == 0){
+    return(bot)
+  }
+
+  for (delta_t in deltas) {
+    bot <- evolve_bot(bot, mu, b, delta_t)
+  }
+
+  return(bot)
+}
+
+
+# Log probability of genetic information in i, given bottleneck probs infecting i
+log_p_given_bot <- function(bot, freq, p, p_new_isnv, log_p_no_isnv){
+  if(freq == 0){
+    log(bot[1]) + log_p_no_isnv
+  }else if(freq == 1){
+    log(bot[3]) + log_p_no_isnv
+  }else{
+    log(
+      bot[1] * p_new_isnv * denovo(freq, p) +
+        bot[2] +
+        bot[3] * p_new_isnv * denovo(1 - freq, p)
+    )
+  }
+}
+
 # Probabilities of successive split bottlenecks, starting with init (initial frequency) (can be a vector)
 p_all_split <- function(b, w, init){
   (b^(w + 1) * 2 * init * (1 - init) / 3^w)
@@ -412,7 +496,11 @@ denovo_normed <- function(x, p, filters, log = FALSE){
 
 ## Maximum time of infection for a host i
 get_max_t <- function(mcmc, data, i){
-  ts <- mcmc$t[which(mcmc$h == i)]
+  js <- which(mcmc$h == i)
+  ts <- c()
+  for (j in js) {
+    ts <- c(ts, mcmc$seq[[j]][length(mcmc$seq[[j]])])
+  }
   if(i <= data$n_obs){
     ts <- c(ts, data$s[i])
   }
@@ -732,46 +820,62 @@ change_genotype <- function(mcmc, data, snv, from, to, i, js, is_observed){
       stop("Error!!!")
     }
 
-    # Figure out whether the snv is absent, present, or isnv in each j
-    old_state_kids <- c()
-    for (j in 1:length(js)) {
-      if(snv %in% c(mcmc$mx0[[js[j]]], mcmc$m10[[js[j]]])){
-        old_state_kids[j] <- "0"
-      }else if(snv %in% c(mcmc$m0y[[js[j]]], mcmc$mxy[[js[j]]], mcmc$m1y[[js[j]]])){
-        old_state_kids[j] <- "y"
-      }else if(snv %in% c(mcmc$m01[[js[j]]], mcmc$mx1[[js[j]]])){
-        old_state_kids[j] <- "1"
-      }else if(from == "absent"){
-        old_state_kids[j] <- "0"
-      }else if(from == "present"){
-        old_state_kids[j] <- "1"
-      }else{
-        stop("Error!!!!!!")
+    if(length(js) > 0){
+      # Figure out whether the snv is absent, present, or isnv in each j
+      old_state_kids <- c()
+      for (j in 1:length(js)) {
+        if(snv %in% c(mcmc$mx0[[js[j]]], mcmc$m10[[js[j]]])){
+          old_state_kids[j] <- "0"
+        }else if(snv %in% c(mcmc$m0y[[js[j]]], mcmc$mxy[[js[j]]], mcmc$m1y[[js[j]]])){
+          old_state_kids[j] <- "y"
+        }else if(snv %in% c(mcmc$m01[[js[j]]], mcmc$mx1[[js[j]]])){
+          old_state_kids[j] <- "1"
+        }else if(from == "absent"){
+          old_state_kids[j] <- "0"
+        }else if(from == "present"){
+          old_state_kids[j] <- "1"
+        }else{
+          stop("Error!!!!!!")
+        }
       }
     }
+
+
 
     # From which list do we delete in i and js?
     if(from == "absent"){
       delete_i <- paste0("m", old_state_anc, "0")
-      delete_js <- paste0("m", "0", old_state_kids)
+      if(length(js) > 0){
+        delete_js <- paste0("m", "0", old_state_kids)
+      }
     }else if(from == "isnv"){
       delete_i <- paste0("m", old_state_anc, "y")
-      delete_js <- paste0("m", "x", old_state_kids)
+      if(length(js) > 0){
+        delete_js <- paste0("m", "x", old_state_kids)
+      }
     }else if(from == "present"){
       delete_i <- paste0("m", old_state_anc, "1")
-      delete_js <- paste0("m", "1", old_state_kids)
+      if(length(js) > 0){
+        delete_js <- paste0("m", "1", old_state_kids)
+      }
     }
 
     # To which list do we add in i and js?
     if(to == "absent"){
       add_i <- paste0("m", old_state_anc, "0")
-      add_js <- paste0("m", "0", old_state_kids)
+      if(length(js) > 0){
+        add_js <- paste0("m", "0", old_state_kids)
+      }
     }else if(to == "isnv"){
       add_i <- paste0("m", old_state_anc, "y")
-      add_js <- paste0("m", "x", old_state_kids)
+      if(length(js) > 0){
+        add_js <- paste0("m", "x", old_state_kids)
+      }
     }else if(to == "present"){
       add_i <- paste0("m", old_state_anc, "1")
-      add_js <- paste0("m", "1", old_state_kids)
+      if(length(js) > 0){
+        add_js <- paste0("m", "1", old_state_kids)
+      }
     }
 
     # Modify the lists
@@ -781,13 +885,14 @@ change_genotype <- function(mcmc, data, snv, from, to, i, js, is_observed){
     if(!is.null(mcmc[[add_i]])){
       mcmc[[add_i]][[i]] <- union(mcmc[[add_i]][[i]], snv)
     }
-
-    for (j in 1:length(js)) {
-      if(!is.null(mcmc[[delete_js[j]]])){
-        mcmc[[delete_js[j]]][[js[j]]] <- setdiff(mcmc[[delete_js[j]]][[js[j]]], snv)
-      }
-      if(!is.null(mcmc[[add_js[j]]])){
-        mcmc[[add_js[j]]][[js[j]]] <- union(mcmc[[add_js[j]]][[js[j]]], snv)
+    if(length(js) > 0){
+      for (j in 1:length(js)) {
+        if(!is.null(mcmc[[delete_js[j]]])){
+          mcmc[[delete_js[j]]][[js[j]]] <- setdiff(mcmc[[delete_js[j]]][[js[j]]], snv)
+        }
+        if(!is.null(mcmc[[add_js[j]]])){
+          mcmc[[add_js[j]]][[js[j]]] <- union(mcmc[[add_js[j]]][[js[j]]], snv)
+        }
       }
     }
   }
@@ -824,6 +929,8 @@ change_genotype <- function(mcmc, data, snv, from, to, i, js, is_observed){
       mcmc$isnv$af[[i]] <- c(mcmc$isnv$af[[i]], runif(1))
       log_p <- 0 # log(1)
     }
+  }else{
+    log_p <- 0
   }
 
   return(list(mcmc, log_p))
@@ -1034,7 +1141,7 @@ genotype <- function(mcmc, data, i, js, comparison = F){
   }
 
   if(comparison){
-    return(log_p_comarison)
+    return(log_p_compare)
   }else{
     return(list(mcmc, log_p))
   }

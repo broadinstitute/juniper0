@@ -817,8 +817,6 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           # Maximum time i could be infected
           max_t <- min(mcmc$t[js])
 
-
-
           ## Stick i onto h
           prop$n <- mcmc$n + 1
           prop$h[i] <- h
@@ -843,6 +841,10 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
           prop$m1y[[i]] <- character(0)
           prop$mx1[[i]] <- character(0)
           prop$mxy[[i]] <- character(0)
+
+          # Also initialize mcmc$isnv
+          prop$isnv$call[[i]] <- character(0)
+          prop$isnv$af[[i]] <- numeric(0)
 
           ## Move all js onto i
           if(upstream){
@@ -1026,6 +1028,10 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
         prop$mx0 <- prop$mx0[-i]
         prop$mx1 <- prop$mx1[-i]
         prop$mxy <- prop$mxy[-i]
+
+        prop$isnv$call <- prop$isnv$call[-i]
+        prop$isnv$af <- prop$isnv$af[-i]
+
         prop$d <- prop$d[-i]
         prop$g_lik <- prop$g_lik[-i]
 
