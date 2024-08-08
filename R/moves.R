@@ -114,7 +114,10 @@ moves$t <- function(mcmc, data){
   # Wider variance when it's unobserved, or it's the root of an unrooted tree
   prop$t[i] <- rnorm(1, mcmc$t[i], ifelse((i > data$n_obs) | (!data$rooted & mcmc$h[i] == 1), 10, 1))
 
-  if(prop$t[i] < prop$t[prop$h[i]]){
+  # Maximum value of t
+  max_t <- get_max_t(mcmc, data, i)
+
+  if(prop$t[i] < prop$t[prop$h[i]] | prop$t[i] > max_t){
     return(mcmc)
   }
 
@@ -477,11 +480,7 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
         )
       }
 
-      update <- i
-      # If updating t, need to also change genomic likelihood of children of i
-      if(resample_t){
-        update <- c(update, which(mcmc$h == i))
-      }
+      update <- c(i, which(mcmc$h == i))
 
       hastings <- log(length(children)) # P(new -> old): 1; P(old -> new): choose from among #[children] people to be h_new
 
@@ -500,6 +499,23 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
           lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
           # P(old to new): draw the seq values in prop
           lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+      }
+
+      # Update genotype
+      geno <- genotype(prop, data, i, which(prop$h == i))
+      prop <- geno[[1]]
+      log_p_old_new <- geno[[2]] # Probability of creating this new genotype
+      log_p_new_old <- genotype(mcmc, data, i, which(mcmc$h == i), comparison = T)
+      hastings <- hastings + log_p_new_old - log_p_old_new
+
+      # Check that the move doesn't violate parsimony
+      to_check <- c(h_old, h_new)
+      for (k in to_check) {
+        if(
+          !genotype(prop, data, k, which(prop$h == k), check_parsimony = T)
+        ){
+          return(mcmc)
+        }
       }
 
       return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -554,11 +570,9 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
         )
       }
 
-      update <- i
-      # If updating t, need to also change genomic likelihood of children of i
-      if(resample_t){
-        update <- c(update, which(mcmc$h == i))
-      }
+
+      update <- c(i, which(mcmc$h == i))
+
 
       hastings <- -log(length(children)) # P(new -> old): choose from among #[children] people to be h_new; P(old -> new): 1
 
@@ -577,6 +591,23 @@ moves$h_step <- function(mcmc, data, upstream = TRUE, resample_t = FALSE, resamp
           lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
           # P(old to new): draw the seq values in prop
           lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+      }
+
+      # Update genotype
+      geno <- genotype(prop, data, i, which(prop$h == i))
+      prop <- geno[[1]]
+      log_p_old_new <- geno[[2]] # Probability of creating this new genotype
+      log_p_new_old <- genotype(mcmc, data, i, which(mcmc$h == i), comparison = T)
+      hastings <- hastings + log_p_new_old - log_p_old_new
+
+      # Check that the move doesn't violate parsimony
+      to_check <- c(h_old, h_new)
+      for (k in to_check) {
+        if(
+          !genotype(prop, data, k, which(prop$h == k), check_parsimony = T)
+        ){
+          return(mcmc)
+        }
       }
 
       return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -643,7 +674,7 @@ moves$h_global <- function(mcmc, data){
       return(mcmc)
     }
 
-    update <- i
+    update <- c(i, which(mcmc$h == i))
 
     rev_scores <- softmax(sapply(choices, score, mcmc=prop, i=i), data$tau)
     hastings <- log(rev_scores[which(choices == h_old)]) - log(scores[which(choices == h_new)])
@@ -658,6 +689,23 @@ moves$h_global <- function(mcmc, data){
       lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
       # P(old to new): draw the seq values in prop
       lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+
+    # Update genotype
+    geno <- genotype(prop, data, i, which(prop$h == i))
+    prop <- geno[[1]]
+    log_p_old_new <- geno[[2]] # Probability of creating this new genotype
+    log_p_new_old <- genotype(mcmc, data, i, which(mcmc$h == i), comparison = T)
+    hastings <- hastings + log_p_new_old - log_p_old_new
+
+    # Check that the move doesn't violate parsimony
+    to_check <- c(h_old, h_new)
+    for (k in to_check) {
+      if(
+        !genotype(prop, data, k, which(prop$h == k), check_parsimony = T)
+      ){
+        return(mcmc)
+      }
+    }
 
     return(accept_or_reject(prop, mcmc, data, update, hastings))
   }
@@ -739,6 +787,20 @@ moves$swap <- function(mcmc, data, exchange_children = FALSE){
           lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
           # P(old to new): draw the seq values in prop
           lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+      }
+
+
+      # Check that the move doesn't violate parsimony
+      to_check <- c(h,i,j)
+      if(exchange_children){
+        to_check <- c(to_check, children_i, children_j)
+      }
+      for (k in to_check) {
+        if(
+          !genotype(prop, data, k, which(prop$h == k), check_parsimony = T)
+        ){
+          return(mcmc)
+        }
       }
 
       return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -899,6 +961,16 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
             }
           }
 
+          # Check that the move doesn't violate parsimony
+          to_check <- c(h, js)
+          for (k in to_check) {
+            if(
+              !genotype(prop, data, k, which(prop$h == k), check_parsimony = T)
+            ){
+              return(mcmc)
+            }
+          }
+
           update <- c(i, js)
           return(accept_or_reject(prop, mcmc, data, update, hastings))
 
@@ -1039,6 +1111,24 @@ moves$create <- function(mcmc, data, create = T, upstream = T){
 
         # Update the js
         js[js > i] <- js[js > i] - 1
+
+        # Update h
+        if(h > i){
+          h <- h - 1
+        }
+
+        # Check that the move doesn't violate parsimony
+        to_check <- c(h, js)
+        for (k in to_check) {
+          # print(k)
+          # print(which(prop$h == k))
+          # print(prop$n)
+          if(
+            !genotype(prop, data, k, which(prop$h == k), check_parsimony = T)
+          ){
+            return(mcmc)
+          }
+        }
 
         update <- js
         return(accept_or_reject(prop, mcmc, data, update, hastings))

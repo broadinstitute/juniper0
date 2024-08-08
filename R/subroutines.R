@@ -404,7 +404,7 @@ evolve_bot <- function(bot, mu, b, delta_t){
     # Absent to absent
     bot[1] * ((1-b) * probs_start_absent[1] + b * probs_start_absent[1]^2) +
     # iSNV to absent
-    bot[2] / 3 +
+    bot[2] * (((1-b) / 2) + (b / 3)) +
     # Present to absent
     bot[3] * ((1-b) * probs_start_present[1] + b * probs_start_present[1]^2)
 
@@ -413,7 +413,7 @@ evolve_bot <- function(bot, mu, b, delta_t){
     # Absent to iSNV
     bot[1] * b * 2 * probs_start_absent[1] * probs_start_absent[2] +
     # iSNV to iSNV
-    bot[2] / 3 +
+    bot[2] * b / 3 +
     # Present to iSNV
     bot[3] * b * 2 * probs_start_present[1] * probs_start_present[2]
 
@@ -421,8 +421,8 @@ evolve_bot <- function(bot, mu, b, delta_t){
   p_present <-
     # Absent to present
     bot[1] * ((1-b) * probs_start_absent[2] + b * probs_start_absent[2]^2) +
-    # Absent to iSNV
-    bot[2] / 3 +
+    # iSNV to present
+    bot[2] * (((1-b) / 2) + (b / 3)) +
     # Present to present
     bot[3] * ((1-b) * probs_start_present[2] + b * probs_start_present[2]^2)
 
@@ -975,9 +975,30 @@ snv_status <- function(mcmc, i, js, snv){
 }
 
 ## Resample the genotype for an unobserved host, or for an observed host with missing sites, based on (approximate) parsimony
-genotype <- function(mcmc, data, i, js, comparison = F){
-  # Get all SNVs
-  snvs <- data$all_snv
+# If strict = T, we forbid imputed iSNVs and take genotype in observed hosts at observed sites to be fixed and known
+genotype <- function(mcmc, data, i, js, comparison = F, check_parsimony = F, strict = T){
+  if(strict){
+    # SNVs where we may need to make a change to get parsimony
+    snvs <- unique(c(
+      mcmc$m01[[i]],
+      mcmc$m0y[[i]],
+      mcmc$m1y[[i]],
+      mcmc$m10[[i]],
+      mcmc$mx0[[i]],
+      mcmc$mxy[[i]],
+      mcmc$mx1[[i]],
+      unlist(mcmc$m01[js]),
+      unlist(mcmc$m0y[js]),
+      unlist(mcmc$m1y[js]),
+      unlist(mcmc$m10[js]),
+      unlist(mcmc$mx0[js]),
+      unlist(mcmc$mxy[js]),
+      unlist(mcmc$mx1[js])
+    ))
+  }else{
+    # Get all SNVs
+    snvs <- data$all_snv
+  }
 
   # If i is observed, the only positions that can change are those without known iSNVs (hence data$isnv not mcmc$isnv)
   if(i <= data$n_obs){
@@ -992,6 +1013,10 @@ genotype <- function(mcmc, data, i, js, comparison = F){
     observed <- character(0)
   }
 
+  # In strict mode, we don't need to do anything at observed sites
+  if(strict){
+    snvs <- setdiff(snvs, observed)
+  }
 
   # Number of neighbors (h[i] and js)
   n_neighbors <- 1 + length(js)
@@ -1020,6 +1045,8 @@ genotype <- function(mcmc, data, i, js, comparison = F){
       n_isnv <- sum(
         c(mcmc$mx0[[i]], unlist(mcmc$m0y[js])) == snv
       )
+
+      n_absent <- n_neighbors - n_present - n_isnv
     }
 
     if(from == "isnv"){
@@ -1032,6 +1059,8 @@ genotype <- function(mcmc, data, i, js, comparison = F){
       n_isnv <- sum(
         c(mcmc$mxy[[i]], unlist(mcmc$mxy[js])) == snv
       )
+
+      n_absent <- n_neighbors - n_present - n_isnv
     }
 
     if(from == "present"){
@@ -1048,96 +1077,135 @@ genotype <- function(mcmc, data, i, js, comparison = F){
       n_present <- n_neighbors - n_absent - n_isnv
     }
 
-    if(n_present >= n_neighbors - 1){
-      # All go 0 to 1
-      # All but 1 go 0 to 1, other 0 to 0
-      # All but 1 go 0 to 1, other 0 to iSNV
-      ideal <- "present"
-    }else if(n_present + n_isnv >= 2){
-      ideal <- "isnv"
+    if(n_neighbors == 1){
+      ideal <- from
+    }else if(n_neighbors == 2){
+      stat <- n_present + n_isnv / 2
+      if(stat > 1){
+        ideal <- "present"
+      }else if(stat==1){
+        ideal <- "isnv"
+      }else{
+        ideal <- "absent"
+      }
     }else{
-      # All go 0 to 0
-      # All but one go 0 to 0, one goes 0 to 1
-      # All but one go 0 to 0, one goes 0 to iSNV
-      ideal <- "absent"
-    }
-
-    ## Step 3: figure out all alternative options for "to"
-    # If observed, there's always one alternative (avoid consensus change)
-    # If unobserved, there's always two alternatives
-    options <- c("absent", "isnv", "present")
-
-    if(from == "absent"){
-      if(snv %in% observed){
-        options <- c("absent", "isnv")
-        if(ideal == "present"){
-          ideal <- "isnv"
-        }
+      if(n_present >= n_neighbors - 1){
+        ideal <- "present"
+      }else if(n_absent >= n_neighbors - 1){
+        ideal <- "absent"
+      }else{
+        ideal <- "isnv"
       }
     }
 
-    if(from == "isnv"){
-      if(snv %in% observed){
-        # Need to figure out whether we're closer to present or absent
-        af <- mcmc$isnv$af[match(snv, mcmc$isnv$call)]
-        if(af < 0.5){
+    ## Side quest: if strict == TRUE, we now have all the info we need to make the move
+    if(strict){
+
+      if(check_parsimony){
+        if((from == "absent" & ideal == "present") | (from == "present" & ideal == "absent")){
+          return(F)
+        }
+      }
+
+      if(ideal == "isnv"){
+        if(comparison){
+          log_p_compare <- log_p_compare + log(1/2) #Designator that the ideal is ambiguous
+        }else{
+          ideal <- sample(c("present", "absent"), 1)
+          log_p <- log_p + log(1/2)
+        }
+      }
+
+      if(!comparison){
+        new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
+        mcmc <- new[[1]]
+        log_p <- log_p + new[[2]]
+        if(new[[2]] != 0){
+          stop("weird")
+        }
+      }
+    }else{
+      ## Step 3: figure out all alternative options for "to"
+      # If observed, there's always one alternative (avoid consensus change)
+      # If unobserved, there's always two alternatives
+      options <- c("absent", "isnv", "present")
+
+      if(from == "absent"){
+        if(snv %in% observed){
           options <- c("absent", "isnv")
           if(ideal == "present"){
             ideal <- "isnv"
           }
-        }else{
+        }
+      }
+
+      if(from == "isnv"){
+        if(snv %in% observed){
+          # Need to figure out whether we're closer to present or absent
+          af <- mcmc$isnv$af[match(snv, mcmc$isnv$call)]
+          if(af < 0.5){
+            options <- c("absent", "isnv")
+            if(ideal == "present"){
+              ideal <- "isnv"
+            }
+          }else{
+            options <- c("isnv", "present")
+            if(ideal == "absent"){
+              ideal <- "isnv"
+            }
+          }
+        }
+      }
+
+      if(from == "present"){
+        if(snv %in% observed){
           options <- c("isnv", "present")
           if(ideal == "absent"){
             ideal <- "isnv"
           }
         }
       }
-    }
 
-    if(from == "present"){
-      if(snv %in% observed){
-        options <- c("isnv", "present")
-        if(ideal == "absent"){
-          ideal <- "isnv"
+      # Suppose our goal is to compute the probability that a randomly-generated genotype for i has the genotype in mcmc
+      # Then if the current genotype ("from") equals the ideal genotype, this contributes a factor of 1-eps, and if not, it's eps/length(options)
+      # Then if "from" is an iSNV: if observed AND vcf present, contributes a factor of 1/filters$af
+      # If observed but NOT vcf present, contributes a factor of 1/0.5
+      # Else contributes a factor of 1
+      if(comparison){
+        if("from" == "ideal"){
+          log_p_compare <- log_p_compare + log(1 - data$eps)
+        }else{
+          log_p_compare <- log_p_compare + log(data$eps / (length(options) - 1))
         }
-      }
-    }
 
-    # Suppose our goal is to compute the probability that a randomly-generated genotype for i has the genotype in mcmc
-    # Then if the current genotype ("from") equals the ideal genotype, this contributes a factor of 1-eps, and if not, it's eps/length(options)
-    # Then if "from" is an iSNV: if observed AND vcf present, contributes a factor of 1/filters$af
-    # If observed but NOT vcf present, contributes a factor of 1/0.5
-    # Else contributes a factor of 1
-    if(comparison){
-      if("from" == "ideal"){
-        log_p_compare <- log_p_compare + log(1 - data$eps)
-      }else{
-        log_p_compare <- log_p_compare + log(data$eps / length(options))
-      }
-
-      if("from" == "isnv"){
-        if(snv %in% observed){
-          if(data$vcf_present[i]){
-            log_p_compare <- log_p_compare + log(1 / data$filters$af)
-          }else{
-            log_p_compare <- log_p_compare + log(2)
+        if("from" == "isnv"){
+          if(snv %in% observed){
+            if(data$vcf_present[i]){
+              log_p_compare <- log_p_compare + log(1 / data$filters$af)
+            }else{
+              log_p_compare <- log_p_compare + log(2)
+            }
           }
         }
-      }
-    }else{
-      # Otherwise, the point of this function is to generate a new genotype for i
-      # First: do we pick the ideal genome?
-      if(runif(1) > data$eps){
-        new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
-        mcmc <- new[[1]]
-        log_p <- log_p + new[[2]] + log(1-data$eps)
       }else{
-        to <- sample(setdiff(options, from), 1)
-        new <- change_genotype(mcmc, data, snv, from, to, i, js, snv %in% observed)
-        mcmc <- new[[1]]
-        log_p <- log_p + new[[2]] + log(data$eps) + log(1 / (length(options) - 1))
+        # Otherwise, the point of this function is to generate a new genotype for i
+        # First: do we pick the ideal genome?
+        if(runif(1) > data$eps){
+          new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
+          mcmc <- new[[1]]
+          log_p <- log_p + new[[2]] + log(1-data$eps)
+        }else{
+          to <- sample(setdiff(options, from), 1)
+          new <- change_genotype(mcmc, data, snv, from, to, i, js, snv %in% observed)
+          mcmc <- new[[1]]
+          log_p <- log_p + new[[2]] + log(data$eps) + log(1 / (length(options) - 1))
+        }
       }
     }
+  }
+
+  if(check_parsimony){
+    return(T)
   }
 
   if(comparison){

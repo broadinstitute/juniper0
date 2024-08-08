@@ -138,6 +138,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
     #print(mean((sapply(mcmc$m01, length) + sapply(mcmc$m10, length)) / (mcmc$t - mcmc$t[mcmc$h]) / data$n_bases, na.rm = T))
     #print(((sapply(mcmc$m01, length) + sapply(mcmc$m10, length))))
 
+    #sum(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data))
+
     #print(mean((sapply(mcmc$m01, length) + sapply(mcmc$m10, length)) / (mcmc$t - mcmc$t[mcmc$h] - log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)) / data$n_bases, na.rm = T))
 
     #print(sapply(mcmc$m01, length))
@@ -149,11 +151,19 @@ run_mcmc <- function(init, noisy = F, logging = F){
     #print(sum(mcmc$d))
     print(mcmc$R)
 
-    print(mcmc$w)
+    #print(mcmc$w)
 
     #hist((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$w + 1))
 
     print(sum(mcmc$w) + mcmc$n)
+    print(mcmc$b)
+
+    for (k in 2:mcmc$n) {
+      if(!genotype(mcmc, data, k, which(mcmc$h == k), check_parsimony = T)){
+        stop("Error: failed parsimony")
+
+      }
+    }
 
     #print(sum(mcmc$w))
     #print(mcmc$m01)
@@ -180,6 +190,13 @@ run_mcmc <- function(init, noisy = F, logging = F){
 # for (i in 1:data$n_obs) {
 #   p_isnv[i] <- length(data$snvs[[i]]$isnv$call) / 10000
 #   freqs <- c(freqs, data$snvs[[i]]$isnv$af)
+# }
+#
+# for (i in 1:100) {
+#
+#   set.seed(i)
+#   res <- run_mcmc(init, T)
+#
 # }
 
 
