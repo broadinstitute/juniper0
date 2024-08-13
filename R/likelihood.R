@@ -23,95 +23,41 @@
 # Compute epidemiological log likelihood
 e_lik <- function(mcmc, data){
 
-  if(
-    any(mcmc$w < 0) |
-      (!data$rooted & mcmc$d[1] > 1)
-
-    # mcmc$a_g < 0 |
-    # mcmc$lambda_g < 0 |
-    # mcmc$a_s < 0 |
-    # mcmc$lambda_s < 0 |
-    # mcmc$rho < 0 |
-    # mcmc$psi < 0
-  ){
-    return(-Inf)
-  }else{
-    # Which people do we compute the epi prior for?
-    if(data$rooted){
-      who <- 2:mcmc$n
-    }else{
-      who <- which(mcmc$h != 1)
-
-    }
-
-    if(data$experimental){
-
-      if(any(mcmc$t > max(data$s, na.rm = T))){
-        return(-Inf)
+    ids <- c()
+    hs <- c()
+    counter <- mcmc$n
+    for (i in 1:mcmc$n) {
+      if((length(mcmc$seq[[i]]) - 1) == 0){
+        ids <- c(ids, i)
+        hs <- c(hs, mcmc$h[i])
+      }else{
+        ids <- c(ids, i, (counter+1):(counter+(length(mcmc$seq[[i]]) - 1)))
+        hs <- c(hs, (counter+1):(counter+(length(mcmc$seq[[i]]) - 1)), mcmc$h[i])
+        counter <- counter + (length(mcmc$seq[[i]]) - 1)
       }
-
-      t_max <- max(data$s, na.rm = T)
-
-      ids <- c()
-      hs <- c()
-      counter <- mcmc$n
-      for (i in 1:mcmc$n) {
-        if(mcmc$w[i] == 0){
-          ids <- c(ids, i)
-          hs <- c(hs, mcmc$h[i])
-        }else{
-          ids <- c(ids, i, (counter+1):(counter+mcmc$w[i]))
-          hs <- c(hs, (counter+1):(counter+mcmc$w[i]), mcmc$h[i])
-          counter <- counter + mcmc$w[i]
-        }
-      }
-      t_inf <- unlist(mcmc$seq)
-
-      hs[ids] <- hs
-      t_inf[ids] <- t_inf
-      #ids[ids] <- ids
-      t_samp <- c(data$s[1:data$n_obs], rep(NA, mcmc$n - data$n_obs + sum(mcmc$w)))
-
-      ttree <- matrix(c(t_inf, t_samp, hs), ncol = 3, byrow = F)
-      ttree[1, 3] <- 0 # Ancestor of person 1 designated as 0
-
-      return(
-        probTTree(
-          ttree, mcmc$rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$a_s, t_max, delta_t = 0.1
-        )
-      )
-
-    }else{
-      return(
-        # Generation intervals
-        sum(dgamma(mcmc$t[who] - mcmc$t[mcmc$h[who]], shape = (mcmc$w[who] + 1) * mcmc$a_g, rate = mcmc$lambda_g, log = T)) +
-
-          # Sojourn intervals
-          sum(dgamma(data$s[2:data$n_obs] - mcmc$t[2:data$n_obs], shape = mcmc$a_s, rate = mcmc$lambda_s, log = T)) +
-
-          # xi-coalescent
-          ifelse(
-            mcmc$rho != Inf,
-            sum(lfactorial(mcmc$d + mcmc$rho - 1)) - mcmc$n * lfactorial(mcmc$rho - 1) + sum(mcmc$d) * log((1-mcmc$psi) / mcmc$psi) + sum(mcmc$w[who]) * log((mcmc$rho * (1 - mcmc$psi) / mcmc$psi)),
-            (sum(mcmc$d) + sum(mcmc$w[who])) * log(data$R)
-          ) #+
-        #ifelse(data$rooted, 0, correction)
-
-
-      )
     }
+    t_inf <- unlist(mcmc$seq)
 
+    hs[ids] <- hs
+    t_inf[ids] <- t_inf
+    #ids[ids] <- ids
+    t_samp <- c(data$s[1:data$n_obs], rep(NA, length(t_inf) - data$n_obs))
 
+    ttree <- matrix(c(t_inf, t_samp, hs), ncol = 3, byrow = F)
+    ttree[1, 3] <- 0 # Ancestor of person 1 designated as 0
 
-
-  }
+    return(
+      TransPhylo::probTTree(
+        ttree, mcmc$rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, data$t_max, delta_t = 0.1
+      )
+    )
 }
 
 # Compute genomic log likelihood for each person
 
 g_lik <- function(mcmc, data, i){
 
-  if(mcmc$v < 0 | mcmc$mu < 0 | mcmc$p < 0 | mcmc$b < 0 | mcmc$lambda < 0 | mcmc$b > 1 | mcmc$w[i] < 0){
+  if(mcmc$v < 0 | mcmc$mu < 0 | mcmc$p < 0 | mcmc$b < 0 | mcmc$lambda < 0 | mcmc$b > 1 | (length(mcmc$seq[[i]]) - 1) < 0){
     return(-Inf)
   }else{
 
@@ -119,10 +65,19 @@ g_lik <- function(mcmc, data, i){
     h <- mcmc$h[i]
 
     # Time of end of exponential growth phase in h
-    t_g <- mcmc$t[h] + log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)
+    t_g <- mcmc$seq[[h]][1] + log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)
 
     # Evolutionary time
-    delta_t <- mcmc$t[i] - mcmc$t[h]
+    delta_t <- mcmc$seq[[i]][1] - mcmc$seq[[h]][1]
+
+    if(TRUE){
+      n_unchanged <- data$n_bases - length(mcmc$m01[[i]]) - length(mcmc$m10[[i]])
+
+      return(n_unchanged * (log(evolveJC(1, mcmc$mu, delta_t))) +
+       # Likelihood from x = 0, y = 1 and x = 1, y = 0
+       (length(mcmc$m01[[i]]) + length(mcmc$m10[[i]])) * (log(evolveJC(0, mcmc$mu, delta_t)))
+      )
+    }
 
     # If i unobserved, or has no iSNV info provided, simply evolve from end of growth phase in h[i] to end of growth phase in i
     isnv_info <- TRUE
@@ -136,23 +91,20 @@ g_lik <- function(mcmc, data, i){
     }
 
     # if(!isnv_info){
-    #   delta_t <- mcmc$t[i] - mcmc$t[h]
+    #   delta_t <- mcmc$seq[[i]][1] - mcmc$seq[[h]][1]
     # }
 
     # Evolutionary time from first downstream host of h to infection time of i, approx
     if(is.infinite(delta_t)){
       delta_t_prime <- Inf
     }else{
-      if(data$experimental){
-        # Time of first transmission on the chain from h to i
-        t_1st_trans <- mcmc$seq[[i]][length(mcmc$seq[[i]])]
-        delta_t_prime <- mcmc$t[i] - t_1st_trans
 
-        if(t_1st_trans < mcmc$t[h]){
-          return(-Inf)
-        }
-      }else{
-        delta_t_prime <- delta_t * mcmc$w[i] / (mcmc$w[i] + 1)
+      # Time of first transmission on the chain from h to i
+      t_1st_trans <- mcmc$seq[[i]][length(mcmc$seq[[i]])]
+      delta_t_prime <- mcmc$seq[[i]][1] - t_1st_trans
+
+      if(t_1st_trans < mcmc$seq[[h]][1]){
+        return(-Inf)
       }
     }
 
@@ -236,7 +188,7 @@ g_lik <- function(mcmc, data, i){
                 start_freqs_xy[which(mcmc$mxy[[i]] %in% mcmc$mxy[[h]])] <- 1/2
 
                 # Proportion of exponential growth phase completed
-                prop_exp_complete <- (t_1st_trans - mcmc$t[h]) / (t_g - mcmc$t[h])
+                prop_exp_complete <- (t_1st_trans - mcmc$seq[[h]][1]) / (t_g - mcmc$seq[[h]][1])
 
                 # Linearly interpolate frequencies
                 freq_xy_anc <- freq_xy_anc * prop_exp_complete + start_freqs_xy * (1 - prop_exp_complete)
@@ -249,9 +201,9 @@ g_lik <- function(mcmc, data, i){
               out <- out +
                 # Likelihood from 0 < x < 1, 0 < y < 1
                 sum(log(
-                  (evolveJC(1, mcmc$mu, delta_t_prime)*(1 - freq_xy_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*freq_xy_anc) * exp(log_p_isnv) * denovo_normed(freq_xy, mcmc$p, data$filters) * (1 - p_all_split(mcmc$b, mcmc$w[i], freq_xy_anc)) +
-                    (evolveJC(1, mcmc$mu, delta_t_prime)*freq_xy_anc + evolveJC(0, mcmc$mu, delta_t_prime)*(1 - freq_xy_anc)) * exp(log_p_isnv) * denovo_normed(1 - freq_xy, mcmc$p, data$filters) * (1 - p_all_split(mcmc$b, mcmc$w[i], freq_xy_anc)) +
-                    p_all_split(mcmc$b, mcmc$w[i], freq_xy_anc)
+                  (evolveJC(1, mcmc$mu, delta_t_prime)*(1 - freq_xy_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*freq_xy_anc) * exp(log_p_isnv) * denovo_normed(freq_xy, mcmc$p, data$filters) * (1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_xy_anc)) +
+                    (evolveJC(1, mcmc$mu, delta_t_prime)*freq_xy_anc + evolveJC(0, mcmc$mu, delta_t_prime)*(1 - freq_xy_anc)) * exp(log_p_isnv) * denovo_normed(1 - freq_xy, mcmc$p, data$filters) * (1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_xy_anc)) +
+                    p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_xy_anc)
                 ))
             }
           }
@@ -286,7 +238,7 @@ g_lik <- function(mcmc, data, i){
             start_freqs_x1[which(mcmc$mx1[[i]] %in% mcmc$mxy[[h]])] <- 1/2
 
             # Proportion of exponential growth phase completed
-            prop_exp_complete <- (t_1st_trans - mcmc$t[h]) / (t_g - mcmc$t[h])
+            prop_exp_complete <- (t_1st_trans - mcmc$seq[[h]][1]) / (t_g - mcmc$seq[[h]][1])
 
             # Linearly interpolate frequencies
             freq_x0_anc <- freq_x0_anc * prop_exp_complete + start_freqs_x0 * (1 - prop_exp_complete)
@@ -296,7 +248,7 @@ g_lik <- function(mcmc, data, i){
               print("warning2")
               print(mcmc$seq[[i]])
               print(t_1st_trans)
-              print(mcmc$t[h])
+              print(mcmc$seq[[h]][1])
               print(freq_x0_anc)
               print(freq_x1_anc)
             }
@@ -309,13 +261,13 @@ g_lik <- function(mcmc, data, i){
             length(mcmc$mx0[[i]]) * ifelse(isnv_info, log_p_no_isnv, 0) +
             sum(log(
               evolveJC(1, mcmc$mu, delta_t_prime)*(1 - freq_x0_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*freq_x0_anc
-            )) + sum(log(1 - p_all_split(mcmc$b, mcmc$w[i], freq_x0_anc))) + # probability we don't transmit successive split bottlenecks
+            )) + sum(log(1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_x0_anc))) + # probability we don't transmit successive split bottlenecks
 
             # Likelihood from 0 < x < 1, y = 1
             length(mcmc$mx1[[i]]) * ifelse(isnv_info, log_p_no_isnv, 0) +
             sum(log(
               evolveJC(1, mcmc$mu, delta_t_prime)*(freq_x1_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*(1 - freq_x1_anc)
-            )) + sum(log(1 - p_all_split(mcmc$b, mcmc$w[i], freq_x1_anc))) # probability we don't transmit successive split bottlenecks
+            )) + sum(log(1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_x1_anc))) # probability we don't transmit successive split bottlenecks
 
         }
       }
@@ -341,7 +293,7 @@ g_lik <- function(mcmc, data, i){
 
 # g_lik <- function(mcmc, data, i){
 #
-#   if(mcmc$v < 0 | mcmc$mu < 0 | mcmc$p < 0 | mcmc$b < 0 | mcmc$lambda < 0 | mcmc$b > 1 | mcmc$w[i] < 0){
+#   if(mcmc$v < 0 | mcmc$mu < 0 | mcmc$p < 0 | mcmc$b < 0 | mcmc$lambda < 0 | mcmc$b > 1 | (length(mcmc$seq[[i]]) - 1) < 0){
 #     return(-Inf)
 #   }else{
 #
@@ -349,7 +301,7 @@ g_lik <- function(mcmc, data, i){
 #     h <- mcmc$h[i]
 #
 #     # Time of end of exponential growth phase in h
-#     t_g <- mcmc$t[h] + log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)
+#     t_g <- mcmc$seq[[h]][1] + log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)
 #
 #     # Evolutionary time intervals for each transmission on the chain from h to i, bottleneck to bottleneck
 #     # Doesn't include h -> last element of seq[[i]]
@@ -357,11 +309,11 @@ g_lik <- function(mcmc, data, i){
 #     deltas <- diff(rev(mcmc$seq[[i]]))
 #     t_1st_trans <- mcmc$seq[[i]][length(mcmc$seq[[i]])]
 #
-#     if(t_1st_trans < mcmc$t[h]){
+#     if(t_1st_trans < mcmc$seq[[h]][1]){
 #       stop("BOO!")
 #     }
 #
-#     # if(t_1st_trans < mcmc$t[h]){
+#     # if(t_1st_trans < mcmc$seq[[h]][1]){
 #     #   return(-Inf)
 #     # }
 #
@@ -421,10 +373,10 @@ g_lik <- function(mcmc, data, i){
 #         }
 #         log_p_obs_no_isnv <- log((1 - mcmc$p)^(1/sqrt(mcmc$p)) + (1 - (1 - mcmc$p)^(1/sqrt(mcmc$p))) * denovo_cdf(upper, mcmc$p))
 #
-#         out <- out + n_never_mutate * (log(evolveJC(1, mcmc$mu, mcmc$t[i] - mcmc$t[h])) + log_p_obs_no_isnv)
+#         out <- out + n_never_mutate * (log(evolveJC(1, mcmc$mu, mcmc$seq[[i]][1] - mcmc$seq[[h]][1])) + log_p_obs_no_isnv)
 #
 #       }else{
-#         out <- out + n_never_mutate * log(evolveJC(1, mcmc$mu, mcmc$t[i] - mcmc$t[h]))
+#         out <- out + n_never_mutate * log(evolveJC(1, mcmc$mu, mcmc$seq[[i]][1] - mcmc$seq[[h]][1]))
 #       }
 #     }
 #
@@ -478,7 +430,7 @@ g_lik <- function(mcmc, data, i){
 #
 #     #print(freq_x1_anc)
 #     #print(t_1st_trans)
-#     #print(mcmc$t[h])
+#     #print(mcmc$seq[[h]][1])
 #
 #     # If transmission occurred before end of exponential growth phase, need to back-mutate these frequencies.
 #     if(delta_init < 0){
@@ -512,7 +464,7 @@ g_lik <- function(mcmc, data, i){
 #       start_freqs_x1[which(mcmc$mx1[[i]] %in% mcmc$mxy[[h]])] <- 1/2
 #
 #       # Proportion of exponential growth phase completed
-#       prop_exp_complete <- (t_1st_trans - mcmc$t[h]) / (t_g - mcmc$t[h])
+#       prop_exp_complete <- (t_1st_trans - mcmc$seq[[h]][1]) / (t_g - mcmc$seq[[h]][1])
 #
 #       # Linearly interpolate frequencies
 #       freq_x0_anc <- freq_x0_anc * prop_exp_complete + start_freqs_x0 * (1 - prop_exp_complete)

@@ -33,7 +33,7 @@ initialize <- function(
     init_ancestry = FALSE, # Specify the starting ancestry
     rooted = TRUE, # Is the root of the transmission network fixed at the ref sequence?
     N = NA, # Population size
-    record = c("n", "h", "w", "t", "b", "mu", "p", "pi"), # Which aspects of mcmc do we want to record
+    record = c("n", "h", "seq", "b", "mu", "p", "pi", "R"), # Which aspects of mcmc do we want to record
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
@@ -306,6 +306,7 @@ initialize <- function(
 
   data <- list()
   data$s <- s
+  data$t_max <- max(data$s, na.rm = T)
   data$N <- N #population size
   data$n_obs <- n # number of observed hosts, plus 1 (index case)
   data$n_bases <- n_bases
@@ -326,6 +327,7 @@ initialize <- function(
   data$vcf_present <- vcf_present
   data$rooted <- rooted
   data$init_mu <- init_mu
+  data$init_p <- init_mu / 10
   data$fixed_mu <- fixed_mu
   data$names <- names
 
@@ -500,15 +502,16 @@ initialize <- function(
       mcmc$isnv$call[[i]] <- data$snvs[[i]]$isnv$call
       mcmc$isnv$af[[i]] <- data$snvs[[i]]$isnv$af
     }
-
-
   }
 
 
 
 
   # Functions of MCMC params
-  mcmc$d <- sapply(1:n, function(x){sum(mcmc$h[2:n] == x)}) # Node degrees
+  #mcmc$d <- sapply(1:n, function(x){sum(mcmc$h[2:n] == x)}) # Node degrees
+
+  mcmc$t <- NULL
+  mcmc$w <- NULL
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes

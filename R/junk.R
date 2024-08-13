@@ -639,3 +639,394 @@ parsimony <- function(data){
 #   }
 # }
 
+## Update one of the w_i's by adding or subtracting either:
+# rounded N(0, sqrt(delta_t * lambda_g / a_g))  (strategic) OR
+# N(0, 3) (random)
+moves$w <- function(mcmc, data){
+  # Choose random host with ancestor
+  if(data$rooted){
+    i <- sample(2:mcmc$n, 1)
+  }else{
+    i <- sample(which(mcmc$h != 1), 1)
+  }
+
+  h <- mcmc$h[i]
+
+  delta_t <- mcmc$t[i] - mcmc$t[h]
+
+  # Proposal
+  prop <- mcmc
+
+  if(delta_t > 50){
+    change <- round(rnorm(1, 0, sqrt(delta_t * mcmc$lambda_g / mcmc$a_g)))
+  }else{
+    change <- round(rnorm(1, 0, 3))
+  }
+
+  prop$w[i] <- mcmc$w[i] + change
+
+  if(prop$w[i] < 0){
+    return(mcmc)
+  }
+
+  ## Experimental version...
+  if(data$experimental){
+    prop$seq[[i]] <- c(
+      prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+    )
+  }
+
+
+  if(data$experimental){
+    hastings <-
+      # P(new to old): draw the seq values in mcmc
+      lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+      # P(old to new): draw the seq values in prop
+      lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+  }else{
+    # With new coalescent:
+    hastings <- 0
+  }
+
+  return(accept_or_reject(prop, mcmc, data, i, hastings))
+
+}
+
+
+
+## Update one of the t_i's using a N(0,1) proposal density if observed; N(0, 10) if not
+moves$t <- function(mcmc, data){
+  # Choose random host with ancestor
+  i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
+  # Proposal
+  prop <- mcmc
+  # Wider variance when it's unobserved, or it's the root of an unrooted tree
+  prop$t[i] <- rnorm(1, mcmc$t[i], ifelse((i > data$n_obs) | (!data$rooted & mcmc$h[i] == 1), 10, 1))
+
+  # Maximum value of t
+  max_t <- get_max_t(mcmc, data, i)
+
+  if(prop$t[i] < prop$t[prop$h[i]] | prop$t[i] > max_t){
+    return(mcmc)
+  }
+
+  # Resample seq
+  if(data$experimental){
+    prop$seq[[i]] <- c(
+      prop$t[i], sort(runif(prop$w[i], prop$t[prop$h[i]], prop$t[i]), decreasing = T)
+    )
+
+    hastings <-
+      # P(new to old): draw the seq values in mcmc
+      lfactorial(mcmc$w[i]) + mcmc$w[i] * log(1 / (mcmc$t[i] - mcmc$t[mcmc$h[i]])) -
+      # P(old to new): draw the seq values in prop
+      lfactorial(prop$w[i]) - prop$w[i] * log(1 / (prop$t[i] - prop$t[prop$h[i]]))
+
+  }else{
+    hastings <- 0
+  }
+
+  update <- c(i, which(mcmc$h ==i))
+
+
+  return(accept_or_reject(prop, mcmc, data, update, hastings))
+}
+
+
+# Update all t's simultaneously
+moves$all_t <- function(mcmc, data){
+  # By how much do we adjust all t's? (except root)
+  delta <- rnorm(1, 0, (mcmc$a_s / mcmc$lambda_s / 5)) # SD is 1/5 of the sojourn interval
+
+  # Maximum we can adjust is the minimum interval from t to s for an observed host
+  max_delta <- min(data$s[1:data$n_obs] - mcmc$t[1:data$n_obs], na.rm = T)
+
+  # Minimum we can adjust delta is such that children of root aren't infected before time 0
+  if(!data$rooted){
+    min_delta <- -Inf
+  }else{
+    root_kids <- which(mcmc$h == 1)
+    root_kid_times <- c()
+    for (j in root_kids) {
+      root_kid_times <- c(root_kid_times, mcmc$seq[[j]][length(mcmc$seq[[j]])])
+    }
+    min_delta <- -min(root_kid_times)
+  }
+
+  if(delta < min_delta | delta > max_delta){
+    return(mcmc)
+  }
+
+  # Proposal
+  prop <- mcmc
+  if(data$rooted){
+    prop$t[2:mcmc$n] <- prop$t[2:mcmc$n] + delta
+    for (j in 2:mcmc$n) {
+      prop$seq[[j]] <- prop$seq[[j]] + delta
+    }
+    update <- root_kids
+  }else{
+    prop$t <- prop$t + delta
+    for (j in 1:mcmc$n) {
+      prop$seq[[j]] <- prop$seq[[j]] + delta
+    }
+    update <- integer(0)
+  }
+
+
+  return(accept_or_reject(prop, mcmc, data, update))
+
+}
+
+genotype_OLD <- function(mcmc, data, i, js, comparison = F, check_parsimony = F, strict = T){
+  if(strict){
+    # SNVs where we may need to make a change to get parsimony
+    snvs <- unique(c(
+      mcmc$m01[[i]],
+      mcmc$m0y[[i]],
+      mcmc$m1y[[i]],
+      mcmc$m10[[i]],
+      mcmc$mx0[[i]],
+      mcmc$mxy[[i]],
+      mcmc$mx1[[i]],
+      unlist(mcmc$m01[js]),
+      unlist(mcmc$m0y[js]),
+      unlist(mcmc$m1y[js]),
+      unlist(mcmc$m10[js]),
+      unlist(mcmc$mx0[js]),
+      unlist(mcmc$mxy[js]),
+      unlist(mcmc$mx1[js])
+    ))
+  }else{
+    # Get all SNVs
+    snvs <- data$all_snv
+  }
+
+  # If i is observed, the only positions that can change are those without known iSNVs (hence data$isnv not mcmc$isnv)
+  if(i <= data$n_obs){
+    snvs <- setdiff(snvs, data$snvs[[i]]$isnv$call)
+  }
+
+  # When VCF is present, observed sites may only change up to the LOD
+  # When not, observed sites may change up to consensus threshhold (50%)
+  if(i <= data$n_obs){
+    observed <- setdiff(snvs, data$snvs[[i]]$missing$call)
+  }else{
+    observed <- character(0)
+  }
+
+  # In strict mode, we don't need to do anything at observed sites
+  if(strict){
+    snvs <- setdiff(snvs, observed)
+  }
+
+  # Number of neighbors (h[i] and js)
+  n_neighbors <- 1 + length(js)
+
+  ## Loop over snvs
+
+  if(comparison){
+    log_p_compare <- 0
+  }else{
+    log_p <- 0 # Probability associated with making the change
+  }
+
+  for (snv in snvs) {
+
+    ## Step 1: figure out if the snv is absent, isnv, or present in i
+    from <- snv_status(mcmc, i, js, snv)
+
+    ## Step 2: Figure out the "ideal" (most parsimonious) state of the snv
+    if(from == "absent"){
+      # How many times does snv appear as present in neighbors?
+      n_present <- sum(
+        c(mcmc$m10[[i]], unlist(mcmc$m01[js])) == snv
+      )
+
+      # How many times does snv appear as iSNV in neighbors?
+      n_isnv <- sum(
+        c(mcmc$mx0[[i]], unlist(mcmc$m0y[js])) == snv
+      )
+
+      n_absent <- n_neighbors - n_present - n_isnv
+    }
+
+    if(from == "isnv"){
+      # How many times does snv appear as present in neighbors?
+      n_present <- sum(
+        c(mcmc$m1y[[i]], unlist(mcmc$mx1[js])) == snv
+      )
+
+      # How many times does snv appear as iSNV in neighbors?
+      n_isnv <- sum(
+        c(mcmc$mxy[[i]], unlist(mcmc$mxy[js])) == snv
+      )
+
+      n_absent <- n_neighbors - n_present - n_isnv
+    }
+
+    if(from == "present"){
+      # How many times does snv appear as ABSENT in neighbors?
+      n_absent <- sum(
+        c(mcmc$m01[[i]], unlist(mcmc$m10[js])) == snv
+      )
+
+      # How many times does snv appear as iSNV in neighbors?
+      n_isnv <- sum(
+        c(mcmc$mx1[[i]], unlist(mcmc$m1y[js])) == snv
+      )
+
+      n_present <- n_neighbors - n_absent - n_isnv
+    }
+
+    ## In strict mode: parsimony given by whichever is more, present or absent, among neighbors.
+    ## 50/50 in case of tie
+    if(strict){
+      stat <- n_present + n_isnv / 2
+      if(stat > n_neighbors / 2){
+        ideal <- "present"
+      }else if(stat < n_neighbors / 2){
+        ideal <- "absent"
+      }else{
+        ideal <- "isnv"
+      }
+    }else{
+      if(n_neighbors == 1){
+        ideal <- from
+      }else if(n_neighbors == 2){
+        stat <- n_present + n_isnv / 2
+        if(stat > 1){
+          ideal <- "present"
+        }else if(stat==1){
+          ideal <- "isnv"
+        }else{
+          ideal <- "absent"
+        }
+      }else{
+        if(n_present >= n_neighbors - 1){
+          ideal <- "present"
+        }else if(n_absent >= n_neighbors - 1){
+          ideal <- "absent"
+        }else{
+          ideal <- "isnv"
+        }
+      }
+    }
+
+    ## Side quest: if strict == TRUE, we now have all the info we need to make the move
+    if(strict){
+
+      if(check_parsimony){
+        if((from == "absent" & ideal == "present") | (from == "present" & ideal == "absent")){
+          return(F)
+        }
+      }
+
+      if(ideal == "isnv"){
+        if(comparison){
+          log_p_compare <- log_p_compare + log(1/2) #Designator that the ideal is ambiguous
+        }else{
+          ideal <- sample(c("present", "absent"), 1)
+          log_p <- log_p + log(1/2)
+        }
+      }
+
+      if(!comparison){
+        new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
+        mcmc <- new[[1]]
+        log_p <- log_p + new[[2]]
+        if(new[[2]] != 0){
+          stop("weird")
+        }
+      }
+    }else{
+      ## Step 3: figure out all alternative options for "to"
+      # If observed, there's always one alternative (avoid consensus change)
+      # If unobserved, there's always two alternatives
+      options <- c("absent", "isnv", "present")
+
+      if(from == "absent"){
+        if(snv %in% observed){
+          options <- c("absent", "isnv")
+          if(ideal == "present"){
+            ideal <- "isnv"
+          }
+        }
+      }
+
+      if(from == "isnv"){
+        if(snv %in% observed){
+          # Need to figure out whether we're closer to present or absent
+          af <- mcmc$isnv$af[match(snv, mcmc$isnv$call)]
+          if(af < 0.5){
+            options <- c("absent", "isnv")
+            if(ideal == "present"){
+              ideal <- "isnv"
+            }
+          }else{
+            options <- c("isnv", "present")
+            if(ideal == "absent"){
+              ideal <- "isnv"
+            }
+          }
+        }
+      }
+
+      if(from == "present"){
+        if(snv %in% observed){
+          options <- c("isnv", "present")
+          if(ideal == "absent"){
+            ideal <- "isnv"
+          }
+        }
+      }
+
+      # Suppose our goal is to compute the probability that a randomly-generated genotype for i has the genotype in mcmc
+      # Then if the current genotype ("from") equals the ideal genotype, this contributes a factor of 1-eps, and if not, it's eps/length(options)
+      # Then if "from" is an iSNV: if observed AND vcf present, contributes a factor of 1/filters$af
+      # If observed but NOT vcf present, contributes a factor of 1/0.5
+      # Else contributes a factor of 1
+      if(comparison){
+        if("from" == "ideal"){
+          log_p_compare <- log_p_compare + log(1 - data$eps)
+        }else{
+          log_p_compare <- log_p_compare + log(data$eps / (length(options) - 1))
+        }
+
+        if("from" == "isnv"){
+          if(snv %in% observed){
+            if(data$vcf_present[i]){
+              log_p_compare <- log_p_compare + log(1 / data$filters$af)
+            }else{
+              log_p_compare <- log_p_compare + log(2)
+            }
+          }
+        }
+      }else{
+        # Otherwise, the point of this function is to generate a new genotype for i
+        # First: do we pick the ideal genome?
+        if(runif(1) > data$eps){
+          new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
+          mcmc <- new[[1]]
+          log_p <- log_p + new[[2]] + log(1-data$eps)
+        }else{
+          to <- sample(setdiff(options, from), 1)
+          new <- change_genotype(mcmc, data, snv, from, to, i, js, snv %in% observed)
+          mcmc <- new[[1]]
+          log_p <- log_p + new[[2]] + log(data$eps) + log(1 / (length(options) - 1))
+        }
+      }
+    }
+  }
+
+  if(check_parsimony){
+    return(T)
+  }
+
+  if(comparison){
+    return(log_p_compare)
+  }else{
+    return(list(mcmc, log_p))
+  }
+}
+

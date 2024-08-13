@@ -150,16 +150,18 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
     #print(sum(mcmc$d))
     print(mcmc$R)
+    #print(mcmc$rho)
 
     #print(mcmc$w)
 
     #hist((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$w + 1))
 
-    print(sum(mcmc$w) + mcmc$n)
+    print(length(unlist(mcmc$seq)))
     print(mcmc$b)
 
+
     for (k in 2:mcmc$n) {
-      if(!genotype(mcmc, data, k, which(mcmc$h == k), check_parsimony = T)){
+      if(!genotype(mcmc, data, k, check_parsimony = T)){
         stop("Error: failed parsimony")
 
       }
@@ -192,11 +194,11 @@ run_mcmc <- function(init, noisy = F, logging = F){
 #   freqs <- c(freqs, data$snvs[[i]]$isnv$af)
 # }
 #
-# for (i in 1:100) {
-#
-#   set.seed(i)
-#   res <- run_mcmc(init, T)
-#
-# }
+for (i in 1:100) {
+
+  set.seed(i)
+  res <- run_mcmc(init, T)
+
+}
 
 

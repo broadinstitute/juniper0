@@ -35,7 +35,7 @@ plot_network <- function(init, type = "standard"){
     # Phylo plot
 
     h <- mcmc$h
-    t <- mcmc$t
+    t <- sapply(mcmc$seq, function(v){v[1]})
     n <- length(h)
     ord <- rev(dfs(h))
 

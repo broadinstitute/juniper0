@@ -34,19 +34,16 @@ local_mcmc <- function(mcmc, data){
 
   for (r in 1:data$n_local) {
 
-
-
-
+    #print(paste("move", r))
 
     # Move 11
-    mcmc <- moves$w(mcmc, data)
     mcmc <- moves$seq(mcmc, data)
 
     # Move 12
-    mcmc <- moves$t(mcmc, data)
 
     # Move 13
     mcmc <- moves$w_t(mcmc, data)
+
     mcmc <- moves$w_t(mcmc, data, recursive = T)
 
 
@@ -54,32 +51,26 @@ local_mcmc <- function(mcmc, data){
     # Move 14
     mcmc <- moves$h_step(mcmc, data)
 
+
+
     # Move 15
     mcmc <- moves$h_step(mcmc, data, upstream = F)
 
 
-    # Move 16
-    mcmc <- moves$h_step(mcmc, data, resample_t = T)
 
-    # Move 17
-    mcmc <- moves$h_step(mcmc, data, upstream = F, resample_t = T)
 
-    # Move 18
-    mcmc <- moves$h_step(mcmc, data, resample_t = T, resample_w = T)
-
-    # Move 19
-    mcmc <- moves$h_step(mcmc, data, upstream = F, resample_t = T, resample_w = T)
 
     # Move 20
-    mcmc <- moves$h_global(mcmc, data)
+    #mcmc <- moves$h_global(mcmc, data)
+
 
 
 
     # Move 21
-    mcmc <- moves$swap(mcmc, data)
+    #mcmc <- moves$swap(mcmc, data)
 
     # Move 22
-    mcmc <- moves$swap(mcmc, data, exchange_children = T)
+    #mcmc <- moves$swap(mcmc, data, exchange_children = T)
 
     # Move 23
     mcmc <- moves$genotype(mcmc, data)
@@ -88,17 +79,7 @@ local_mcmc <- function(mcmc, data){
     mcmc <- moves$create(mcmc, data)
 
     # Move 25
-    mcmc <- moves$create(mcmc, data, create = F)
-
-    # Move 26
-    mcmc <- moves$create(mcmc, data, upstream = F)
-
-    # Move 27
-    mcmc <- moves$create(mcmc, data, create = F, upstream = F)
-
-
-
-
+    mcmc <- moves$delete(mcmc, data)
 
     # Append new results
     if(r %% data$sample_every == 0){
@@ -189,8 +170,7 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       # Correct lengths of entries, to avoid carrying over extraneous information
       mcmc$n <- data$n_obs + displacement
       mcmc$h <- mcmc$h[1:mcmc$n]
-      mcmc$w <- mcmc$w[1:mcmc$n]
-      mcmc$t <- mcmc$t[1:mcmc$n]
+      mcmc$seq <- mcmc$seq[1:mcmc$n]
       mcmc$m01 <- mcmc$m01[1:mcmc$n]
       mcmc$m10 <- mcmc$m10[1:mcmc$n]
       mcmc$m0y <- mcmc$m0y[1:mcmc$n]
@@ -198,11 +178,9 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       mcmc$mx0 <- mcmc$mx0[1:mcmc$n]
       mcmc$mx1 <- mcmc$mx1[1:mcmc$n]
       mcmc$mxy <- mcmc$mxy[1:mcmc$n]
-      mcmc$d <- mcmc$d[1:mcmc$n]
       mcmc$g_lik <- mcmc$g_lik[1:mcmc$n]
       mcmc$root <- NULL
       mcmc$cluster <- NULL
-
 
       # Update all entries of mcmc for each cluster (plus roots of upstream clusters)
       for (j in 1:n_subtrees) {
@@ -214,10 +192,8 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
 
         # mcmc$d does not update at frozen nodes
         unfrozen <- setdiff(1:all_res[[j]][[i]]$n, all_res[[j]][[i]]$external_roots)
-        mcmc$d[mappings[[j]][unfrozen]] <- all_res[[j]][[i]]$d[unfrozen]
 
-        mcmc$w[mappings[[j]]] <- all_res[[j]][[i]]$w
-        mcmc$t[mappings[[j]]] <- all_res[[j]][[i]]$t
+        mcmc$seq[mappings[[j]]] <- all_res[[j]][[i]]$seq
         mcmc$m01[mappings[[j]]] <- all_res[[j]][[i]]$m01
         mcmc$m10[mappings[[j]]] <- all_res[[j]][[i]]$m10
         mcmc$m0y[mappings[[j]]] <- all_res[[j]][[i]]$m0y

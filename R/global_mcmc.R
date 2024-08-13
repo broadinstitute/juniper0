@@ -109,8 +109,7 @@ breakdown <- function(mcmc, data, old_roots){
     mcmcs[[i]]$n <- length(joined)
     mcmcs[[i]]$h <- mcmcs[[i]]$h[joined]
     mcmcs[[i]]$h <- match(mcmcs[[i]]$h, joined)
-    mcmcs[[i]]$w <- mcmcs[[i]]$w[joined]
-    mcmcs[[i]]$t <- mcmcs[[i]]$t[joined]
+    mcmcs[[i]]$seq <- mcmcs[[i]]$seq[joined]
     mcmcs[[i]]$m01 <- mcmcs[[i]]$m01[joined]
     mcmcs[[i]]$m10 <- mcmcs[[i]]$m10[joined]
     mcmcs[[i]]$m0y <- mcmcs[[i]]$m0y[joined]
