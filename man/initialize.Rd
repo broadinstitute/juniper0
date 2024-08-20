@@ -13,7 +13,7 @@ initialize(
   init_ancestry = FALSE,
   rooted = TRUE,
   N = NA,
-  record = c("n", "h", "w", "t", "b", "mu", "p"),
+  record = c("n", "h", "seq", "b", "mu", "p", "pi", "R"),
   filters = NULL,
   check_names = TRUE,
   indir = "input_data",
@@ -26,7 +26,7 @@ initialize(
   growth = NULL,
   init_mu = 1e-05,
   fixed_mu = F,
-  experimental = FALSE
+  experimental = TRUE
 )
 }
 \arguments{
