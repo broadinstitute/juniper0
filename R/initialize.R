@@ -415,7 +415,7 @@ initialize <- function(
         if(g >= 3){
           anc <- ancestry(init_h, i)
           for (j in 2:(length(anc) - 1)) {
-            mcmc <- update_genetics_upstream(mcmc, mcmc, i, anc[j])
+            mcmc <- update_genetics_upstream(mcmc, i, anc[j])
           }
         }
 
@@ -463,7 +463,7 @@ initialize <- function(
 
     # Update genetics
     for (i in setdiff(2:n, earliest)) {
-      mcmc <- update_genetics_upstream(mcmc, mcmc, i, earliest)
+      mcmc <- update_genetics_upstream(mcmc, i, earliest)
     }
 
   }
