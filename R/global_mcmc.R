@@ -25,29 +25,29 @@
 global_mcmc <- function(mcmc, data){
 
   # Move 1
-  mcmc <- moves$b(mcmc, data)
+  mcmc <- move_b(mcmc, data)
 
-  #mcmc <- moves$a_g(mcmc, data)
+  #mcmc <- move_a_g(mcmc, data)
 
   # Move 6
   if(!data$fixed_mu){
-    mcmc <- moves$mu(mcmc, data)
+    mcmc <- move_mu(mcmc, data)
   }
   # Move 7
-  mcmc <- moves$p(mcmc, data)
+  mcmc <- move_p(mcmc, data)
 
   if(data$experimental){
     #print("hi")
-    mcmc <- moves$pi(mcmc, data)
-    mcmc <- moves$R(mcmc, data)
+    mcmc <- move_pi(mcmc, data)
+    mcmc <- move_R(mcmc, data)
   }
 
   # Move 8
-  #mcmc <- moves$v(mcmc, data)
-  #mcmc <- moves$lambda(mcmc, data)
+  #mcmc <- move_v(mcmc, data)
+  #mcmc <- move_lambda(mcmc, data)
 
-  # mcmc <- moves$rho(mcmc, data)
-  # mcmc <- moves$psi(mcmc, data)
+  # mcmc <- move_rho(mcmc, data)
+  # mcmc <- move_psi(mcmc, data)
 
   # We are fixing parameters associated with moves 2-5, 9-10
   return(mcmc)

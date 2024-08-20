@@ -22,10 +22,10 @@
 
 ### MCMC moves
 
-moves <- list()
+#moves <- list()
 
 ## Update time of infection for a host on an edge leading to i
-moves$seq <- function(mcmc, data){
+move_seq <- function(mcmc, data){
   # Choose random host with ancestor
   i <- sample(2:mcmc$n, 1)
 
@@ -49,7 +49,7 @@ moves$seq <- function(mcmc, data){
 
 ## Update t_i and w_i and w_j's simultaneously, where j is the child of i
 # If recursive = T, also update time of infection for all ancestors of i
-moves$w_t <- function(mcmc, data, recursive = F){
+move_w_t <- function(mcmc, data, recursive = F){
   # Choose random host with ancestor
   choices <- setdiff(2:mcmc$n, mcmc$external_roots)
 
@@ -122,7 +122,7 @@ moves$w_t <- function(mcmc, data, recursive = F){
 }
 
 ## Update b using a N(0,0.01) proposal density
-moves$b <- function(mcmc, data){
+move_b <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$b <- rnorm(1, mcmc$b, 0.1)
@@ -131,7 +131,7 @@ moves$b <- function(mcmc, data){
 }
 
 ## Update b using a N(0,0.01) proposal density
-moves$pi <- function(mcmc, data){
+move_pi <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$pi <- rnorm(1, mcmc$pi, 0.05)
@@ -145,7 +145,7 @@ moves$pi <- function(mcmc, data){
 }
 
 ## Update lambda using a N(0,0.5^2) proposal density
-moves$lambda <- function(mcmc, data){
+move_lambda <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$lambda <- rnorm(1, mcmc$lambda, 0.5)
@@ -161,7 +161,7 @@ moves$lambda <- function(mcmc, data){
 }
 
 ## Update a_g using a N(0,1) proposal density
-moves$a_g <- function(mcmc, data){
+move_a_g <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$a_g <- rnorm(1, mcmc$a_g, 0.5)
@@ -180,7 +180,7 @@ moves$a_g <- function(mcmc, data){
 }
 
 ## Update a_s using a N(0,1) proposal density
-moves$a_s <- function(mcmc, data){
+move_a_s <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$a_s <- rnorm(1, mcmc$a_s, 1)
@@ -195,7 +195,7 @@ moves$a_s <- function(mcmc, data){
 }
 
 ## Update mu using a N(0,1e-7) proposal density
-moves$mu <- function(mcmc, data){
+move_mu <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 5)
@@ -205,7 +205,7 @@ moves$mu <- function(mcmc, data){
 }
 
 ## Update p using a N(0,1e-7) proposal density
-moves$p <- function(mcmc, data){
+move_p <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$p <- rnorm(1, mcmc$p, data$init_mu / 10)
@@ -214,7 +214,7 @@ moves$p <- function(mcmc, data){
 }
 
 ## Update v using a N(0,100) proposal density (rounded)
-moves$v <- function(mcmc, data){
+move_v <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$v <- round(rnorm(1, mcmc$v, 1000))
@@ -230,7 +230,7 @@ moves$v <- function(mcmc, data){
 }
 
 ## Update rho using a N(0,0.1) proposal density
-moves$rho <- function(mcmc, data){
+move_rho <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$rho <- rnorm(1, mcmc$rho, 0.1)
@@ -245,7 +245,7 @@ moves$rho <- function(mcmc, data){
 }
 
 ## Update R
-moves$R <- function(mcmc, data){
+move_R <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$R <- rnorm(1, mcmc$R, 0.1)
@@ -266,7 +266,7 @@ moves$R <- function(mcmc, data){
 }
 
 ## Update psi using a N(0,0.1) proposal density
-moves$psi <- function(mcmc, data){
+move_psi <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$psi <- rnorm(1, mcmc$psi, 0.1)
@@ -281,7 +281,7 @@ moves$psi <- function(mcmc, data){
 }
 
 ## Update genotype at (a) missing sites in observed host, or (b) all sites in unobserved host, based on parsimony
-moves$genotype <- function(mcmc, data){
+move_genotype <- function(mcmc, data){
 
   # Choose random host with ancestor
   i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
@@ -303,7 +303,7 @@ moves$genotype <- function(mcmc, data){
 ### Topological moves
 
 ## Move the ancestor of a node one step upstream (towards tips) or one step downstream (towards root) onto next/previous tracked host
-moves$h_step <- function(mcmc, data, upstream = TRUE){
+move_h_step <- function(mcmc, data, upstream = TRUE){
   # Choose random host with ancestor
   i <- sample(2:mcmc$n, 1)
 
@@ -415,7 +415,7 @@ moves$h_step <- function(mcmc, data, upstream = TRUE){
 
 ## Global change in ancestor
 # Importance sampling based on other nodes with similar additions / deletions
-moves$h_global <- function(mcmc, data){
+move_h_global <- function(mcmc, data){
   # Choose random host with ancestor
   i <- sample(2:mcmc$n, 1)
 
@@ -510,7 +510,7 @@ moves$h_global <- function(mcmc, data){
 ## The swap
 ## Switch h -> i -> j to
 ## h -> j -> i
-moves$swap <- function(mcmc, data, exchange_children = FALSE){
+move_swap <- function(mcmc, data, exchange_children = FALSE){
   # Choose host with a parent and a grandparent
   choices <- which(mcmc$h != 1)
   choices <- setdiff(choices, mcmc$external_roots)
@@ -586,7 +586,7 @@ moves$swap <- function(mcmc, data, exchange_children = FALSE){
 
 
 ## Create / remove a node
-moves$create <- function(mcmc, data){
+move_create <- function(mcmc, data){
 
   hastings <- 0
 
@@ -690,7 +690,7 @@ moves$create <- function(mcmc, data){
 }
 
 
-moves$delete <- function(mcmc, data){
+move_delete <- function(mcmc, data){
 
   # If no unobserved nodes, nothing to do here
   if(mcmc$n == data$n_obs){

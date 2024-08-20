@@ -37,38 +37,38 @@ local_mcmc <- function(mcmc, data){
     #print(paste("move", r))
 
     # Move 11
-    mcmc <- moves$seq(mcmc, data)
+    mcmc <- move_seq(mcmc, data)
 
     # Move 12
 
     # Move 13
-    mcmc <- moves$w_t(mcmc, data)
+    mcmc <- move_w_t(mcmc, data)
 
-    mcmc <- moves$w_t(mcmc, data, recursive = T)
+    mcmc <- move_w_t(mcmc, data, recursive = T)
 
     # Move 14
-    mcmc <- moves$h_step(mcmc, data)
+    mcmc <- move_h_step(mcmc, data)
 
     # Move 15
-    mcmc <- moves$h_step(mcmc, data, upstream = F)
+    mcmc <- move_h_step(mcmc, data, upstream = F)
 
     # Move 20
-    #mcmc <- moves$h_global(mcmc, data)
+    #mcmc <- move_h_global(mcmc, data)
 
     # Move 21
-    #mcmc <- moves$swap(mcmc, data)
+    #mcmc <- move_swap(mcmc, data)
 
     # Move 22
-    #mcmc <- moves$swap(mcmc, data, exchange_children = T)
+    #mcmc <- move_swap(mcmc, data, exchange_children = T)
 
     # Move 23
-    mcmc <- moves$genotype(mcmc, data)
+    mcmc <- move_genotype(mcmc, data)
 
     # Move 24
-    mcmc <- moves$create(mcmc, data)
+    mcmc <- move_create(mcmc, data)
 
     # Move 25
-    mcmc <- moves$delete(mcmc, data)
+    mcmc <- move_delete(mcmc, data)
 
     # Append new results
     if(r %% data$sample_every == 0){
