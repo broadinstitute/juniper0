@@ -345,11 +345,11 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
     # If times incompatible, return mcmc
     if(fix_latest_host){
-      if(mcmc$seq[[i]][1] < mcmc$seq[[h_new]][1]){
+      if(mcmc$seq[[i]][1] <= mcmc$seq[[h_new]][1]){
         return(mcmc)
       }
     }else{
-      if(get_max_t(mcmc, data, i) < mcmc$seq[[h_new]][1]){
+      if(get_max_t(mcmc, data, i) <= mcmc$seq[[h_new]][1]){
         return(mcmc)
       }
     }
