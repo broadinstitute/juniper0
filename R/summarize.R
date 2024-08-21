@@ -34,10 +34,10 @@ summarize <- function(results, burnin = 0.2){
 
     h <- results[[2]][[i]]$h
     n <- results[[2]][[i]]$n
-    w <- results[[2]][[i]]$w
+    w <- sapply(results[[2]][[i]]$seq, length) - 1
 
     if(!rooted){
-      tmrca <- c(tmrca, results[[2]][[i]]$t[which(h == 1)])
+      tmrca <- c(tmrca, (results[[2]][[i]]$seq[[which(h == 1)]])[1])
     }
 
     # Most recent observed ancestor
