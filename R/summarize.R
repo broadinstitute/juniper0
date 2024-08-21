@@ -4,7 +4,7 @@
 #'
 #' @param results List returned by run_mcmc().
 #' @param burnin Proportion of MCMC iterations to discard as burnin. Defaults to 0.2.
-#' @return A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, and posterior samples of mu (mutation rate in substitutions per site per day), p (mutation rate in mutations per site per cycle), b (probability of incomplete bottleneck), and the time of the MRCA (if the tree is unrooted).
+#' @return A list consisting of a matrix of direct transmissions and their posterior probabilities, a matrix of indirect transmissions and their posterior probabilities, posterior samples of various parameters, and the time of the MRCA (if the tree is unrooted).
 #' @export
 summarize <- function(results, burnin = 0.2){
   n_reps <- length(results[[1]])
@@ -20,6 +20,8 @@ summarize <- function(results, burnin = 0.2){
   mus <- c()
   ps <- c()
   pis <- c()
+  Rs <- c()
+
   if(!rooted){
     tmrca <- c()
   }
@@ -28,8 +30,7 @@ summarize <- function(results, burnin = 0.2){
     mus <- c(mus, results[[2]][[i]]$mu)
     ps <- c(ps, results[[2]][[i]]$p)
     pis <- c(pis, results[[2]][[i]]$pi)
-
-
+    Rs <- c(Rs, results[[2]][[i]]$R)
 
     h <- results[[2]][[i]]$h
     n <- results[[2]][[i]]$n
@@ -80,7 +81,8 @@ summarize <- function(results, burnin = 0.2){
     mu = mus,
     p = ps,
     b = bs,
-    pi = pis
+    pi = pis,
+    R = Rs
   )
 
   if(!rooted){
