@@ -71,6 +71,8 @@ g_lik <- function(mcmc, data, i){
     delta_t <- mcmc$seq[[i]][1] - mcmc$seq[[h]][1]
 
     if(TRUE){
+      #return(0)
+
       n_unchanged <- data$n_bases - length(mcmc$m01[[i]]) - length(mcmc$m10[[i]])
 
       return(n_unchanged * (log(evolveJC(1, mcmc$mu, delta_t))) +

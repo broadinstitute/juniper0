@@ -36,11 +36,12 @@ global_mcmc <- function(mcmc, data){
   # Move 7
   mcmc <- move_p(mcmc, data)
 
-  if(data$experimental){
-    #print("hi")
-    mcmc <- move_pi(mcmc, data)
-    mcmc <- move_R(mcmc, data)
-  }
+
+  #print("hi")
+  mcmc <- move_pi(mcmc, data)
+  mcmc <- move_R(mcmc, data)
+
+
 
   # Move 8
   #mcmc <- move_v(mcmc, data)

@@ -518,14 +518,137 @@ get_max_t <- function(mcmc, data, i, fix_child_seq = TRUE){
 
 ## Sample number of hosts along an edge (i.e. length of seq)
 # Minimum of 1
-rw <- function(mcmc, min_t, max_t){
-  1 + rpois(1, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)))
+# Choose the best value with probability 0.95, otherwise random value
+# Support is non-negative integers when fix_latest_host = TRUE
+# Support is positive integers when fix_latest_host = FALSE
+rw <- function(mcmc, min_t, max_t, fix_latest_host){
+  if(runif(1) < 0.95){
+    if(fix_latest_host){
+      return(max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)) - 1), 0))
+    }else{
+      return(max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)) - 1), 1))
+    }
+  }else{
+    if(fix_latest_host){
+      return(rpois(1, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g))))
+    }else{
+      return(1 + rpois(1, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g))))
+    }
+  }
 }
 
 # LOG density of number of hosts along an edge
-dw <- function(w, mcmc, min_t, max_t, log = TRUE){
-  dpois(w - 1, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)), log = log)
+dw <- function(w, mcmc, min_t, max_t, fix_latest_host){
+  if(fix_latest_host){
+    ideal <- max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)) - 1), 0)
+  }else{
+    ideal <- max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)) - 1), 1)
+  }
+
+  if(w == ideal){
+    if(fix_latest_host){
+      return(
+        log(
+          0.95 + 0.05 * dpois(w, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)))
+        )
+      )
+    }else{
+      return(
+        log(
+          0.95 + 0.05 * dpois(w - 1, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)))
+        )
+      )
+    }
+  }else{
+    if(fix_latest_host){
+      return(
+        log(0.05) + dpois(w, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)), log = TRUE)
+      )
+    }else{
+      return(
+        log(0.05) + dpois(w - 1, ((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)), log = TRUE)
+      )
+    }
+  }
 }
+
+# Sample times of infection of hosts along an edge
+rseq <- function(w, min_t, max_t, mcmc){
+
+  if(w==0){
+    return(numeric(0))
+  }
+
+  ## FOR NOW: just sorted uniform draw
+  return(sort(runif(w, min_t, max_t), decreasing = T))
+
+  # draw <- cumsum(rgamma(w + 1, shape = mcmc$a_g, rate = mcmc$lambda_g))
+  # return(rev(draw / draw[length(draw)])[-1] * (max_t - min_t) + min_t)
+
+}
+
+# LOG Density of sampled times
+# Note seq does not include the latest host if fix_latest_host = TRUE
+dseq <- function(seq, w, min_t, max_t, mcmc){
+  if(any(seq >= max_t) | any(seq <= min_t)){
+    return(-Inf)
+  }
+
+  out <- 0
+  if(length(seq) == 0){
+    return(out)
+  }
+
+  ## FOR NOW: just sorted uniform density
+  return(lfactorial(w) + w * log(1 / (max_t - min_t)))
+
+  # # Record max_t - min_t, for change of density
+  # delta_t <- max_t - min_t
+  #
+  # for (i in 1:w) {
+  #   # Get the fraction of the remaining interval max_t - min_t taken up by seq[i], going back in time
+  #   #print((max_t - seq[i]))
+  #   #print(max_t - min_t)
+  #   frac <- (max_t - seq[i]) / (max_t - min_t)
+  #
+  #   # This is the ratio of a single Gamma(a_g, lambda_g) draw divided by itself plus another w - i + 1 i.i.d. Gammas
+  #   # Hence the ratio is Beta(a_g, a_g * (w - i + 1))
+  #   # Final term is change of variables
+  #   out <- out + dbeta(frac, mcmc$a_g, mcmc$a_g * (w - i + 1), log = T) + log(delta_t / (max_t - min_t))
+  #
+  #   # Finally we reset max_t to be seq[i], so that we calculate the remainder of the interval for next iteration in loop
+  #   max_t <- seq[i]
+  # }
+  #
+  # return(out)
+}
+
+# # Test this out with simple mcmc sampler
+# w <- 3
+# max_t <- 2
+# samps <- list(max_t * seq(1 - 1/(w+1), 1/(w+1), -1/(w+1)))
+# for (i in 2:10000) {
+#   pr <- samps[[i-1]] + rnorm(w, 0, 0.1)
+#   if(log(runif(1)) < dseq(pr, w, 0, max_t, mcmc) - dseq(samps[[i-1]], w, 0, max_t, mcmc)){
+#     samps[[i]] <- pr
+#   }else{
+#     samps[[i]] <- samps[[i-1]]
+#   }
+# }
+# hist(unlist(samps), breaks = seq(0,2,0.02))
+
+# dseq(c(1.3, 0.9, 0.6), 3, 0, 2, mcmc)
+#
+# ds <- c()
+# for (i in seq(10,15,0.05)) {
+#   for (j in seq(10, 15, 0.05)) {
+#     ds <- c(ds, dseq(c(i,j), 2, 10, 15, mcmc))
+#   }
+# }
+# sum(exp(ds))
+
+# dseq(c(0, 0.5), 2, 0, 1, mcmc)
+
 
 
 

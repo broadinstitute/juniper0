@@ -127,15 +127,17 @@ run_mcmc <- function(init, noisy = F, logging = F){
       )
     }
 
-    # print(mcmc$pi)
+    print(mcmc$pi)
     # print(all(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data) == mcmc$g_lik[2:mcmc$n]))
     #
     # print(sum(sapply(2:data$n_obs, cc_from_root, mcmc=mcmc)))
     #
-    # print(mcmc$R)
+    print(mcmc$R)
     #
     # print(length(unlist(mcmc$seq)))
     # print(mcmc$b)
+    print(mean(data$s[2:data$n_obs] - sapply(mcmc$seq[2:data$n_obs], function(v){v[1]})))
+    print(length(unlist(mcmc$seq)))
 
 
   }

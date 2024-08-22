@@ -146,15 +146,17 @@ prior <- function(mcmc, priors = NULL){
     }
   }
 
-  priors$b(mcmc$b) +
-    #priors$a_g(mcmc$a_g) +
-    #priors$a_s(mcmc$a_s) +
-    priors$mu(mcmc$mu) +
-    priors$p(mcmc$p) +
-    priors$v(mcmc$v) +
-    priors$lambda(mcmc$lambda) #+
-    #priors$rho(mcmc$rho) +
-    #priors$psi(mcmc$psi)
+  # priors$b(mcmc$b) +
+  #   #priors$a_g(mcmc$a_g) +
+  #   #priors$a_s(mcmc$a_s) +
+  #   priors$mu(mcmc$mu) +
+  #   priors$p(mcmc$p) +
+  #   priors$v(mcmc$v) +
+  #   priors$lambda(mcmc$lambda) #+
+  #   #priors$rho(mcmc$rho) +
+  #   #priors$psi(mcmc$psi)
+
+  0
 
 }
 

@@ -41,28 +41,45 @@ resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all"){
   # Min time of infection of i
   min_t <- mcmc$seq[[h]][1]
 
+  # w, w_old, w_new always represent the number of hosts BETWEEN min_t and max_t, i.e. the ones whose times we resample, not including hosts at min_t or max_t
+  # hence when fix_latest_host = TRUE, it's one less than the length of seq; otherwise length of seq
+
   # log P(new -> old)
-  w_old <- length(mcmc$seq[[i]])
   if(fix_latest_host){
-    log_p_new_old <- dw(w_old, mcmc, min_t, max_t) + lfactorial(w_old - 1) + (w_old - 1) * log(1 / (max_t - min_t))
+    seq_old <- (mcmc$seq[[i]])[-1]
   }else{
-    log_p_new_old <- dw(w_old, mcmc, min_t, max_t) + lfactorial(w_old) + w_old * log(1 / (max_t - min_t))
+    seq_old <- mcmc$seq[[i]]
   }
+
+  w_old <- length(seq_old)
+  log_p_new_old <- dw(w_old, mcmc, min_t, max_t, fix_latest_host) + dseq(seq_old, w_old, min_t, max_t, mcmc)
 
   if(output == "log_p_new_old"){
     return(log_p_new_old)
   }
 
   # Resample number of hosts along the edge
-  w_new <- rw(mcmc, min_t, max_t)
+  w_new <- rw(mcmc, min_t, max_t, fix_latest_host)
+  seq_new <- rseq(w_new, min_t, max_t, mcmc)
+
+  if(is.unsorted(rev(seq_new))){
+    stop("ww")
+  }
+
+  if(length(seq_old) != w_old | length(seq_new) != w_new){
+    stop("www")
+  }
+
+  log_p_old_new <- dw(w_new, mcmc, min_t, max_t, fix_latest_host) + dseq(seq_new, w_new, min_t, max_t, mcmc)
 
   # Resampled times of infection
   if(fix_latest_host){
-    mcmc$seq[[i]] <- c(mcmc$seq[[i]][1], sort(runif(w_new - 1, min_t, max_t), decreasing = T))
-    log_p_old_new <- dw(w_new, mcmc, min_t, max_t) + lfactorial(w_new - 1) + (w_new - 1) * log(1 / (max_t - min_t))
+    mcmc$seq[[i]] <- c(mcmc$seq[[i]][1], seq_new)
   }else{
-    mcmc$seq[[i]] <- sort(runif(w_new, min_t, max_t), decreasing = T)
-    log_p_old_new <- dw(w_new, mcmc, min_t, max_t) + lfactorial(w_new) + w_new * log(1 / (max_t - min_t))
+    mcmc$seq[[i]] <- seq_new
+    if(length(seq_new) == 0){
+      stop("???")
+    }
   }
 
   return(list(

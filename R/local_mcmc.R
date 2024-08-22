@@ -34,6 +34,9 @@ local_mcmc <- function(mcmc, data){
 
   for (r in 1:data$n_local) {
 
+
+
+
     #print(paste("move", r))
 
     # Move 11
@@ -46,29 +49,43 @@ local_mcmc <- function(mcmc, data){
 
     mcmc <- move_w_t(mcmc, data, recursive = T)
 
-    # Move 14
-    mcmc <- move_h_step(mcmc, data)
+    if(runif(1) < 1/2){
+      # Move 14
+      mcmc <- move_h_step(mcmc, data)
+    }else{
+      # Move 15
+      mcmc <- move_h_step(mcmc, data, upstream = F)
+    }
 
-    # Move 15
-    mcmc <- move_h_step(mcmc, data, upstream = F)
 
     # Move 20
-    #mcmc <- move_h_global(mcmc, data)
+    mcmc <- move_h_global(mcmc, data)
+    mcmc <- move_h_global(mcmc, data, biassed = F)
 
     # Move 21
-    #mcmc <- move_swap(mcmc, data)
+    mcmc <- move_swap(mcmc, data)
 
     # Move 22
-    #mcmc <- move_swap(mcmc, data, exchange_children = T)
+    mcmc <- move_swap(mcmc, data, exchange_children = T)
 
     # Move 23
     mcmc <- move_genotype(mcmc, data)
 
-    # Move 24
-    mcmc <- move_create(mcmc, data)
+    if(runif(1) < 1/2){
+      # Move 24
+      mcmc <- move_create(mcmc, data)
+    }else{
+      # Move 25
+      mcmc <- move_delete(mcmc, data)
+    }
 
-    # Move 25
-    mcmc <- move_delete(mcmc, data)
+    if(runif(1) < 1/2){
+      # Move 26
+      mcmc <- move_create(mcmc, data, upstream = F)
+    }else{
+      # Move 27
+      mcmc <- move_delete(mcmc, data, upstream = F)
+    }
 
     # Append new results
     if(r %% data$sample_every == 0){

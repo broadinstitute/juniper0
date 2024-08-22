@@ -38,8 +38,11 @@ move_seq <- function(mcmc, data){
   }
 
   prop <- resample_seq(mcmc, data, i, fix_latest_host)
+
   hastings <- prop[[2]] - prop[[3]]
   prop <- prop[[1]]
+
+
 
   return(accept_or_reject(prop, mcmc, data, update, hastings))
 
@@ -415,7 +418,9 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
 ## Global change in ancestor
 # Importance sampling based on other nodes with similar additions / deletions
-move_h_global <- function(mcmc, data){
+# If biassed = T, biassed towards places on tree with similar additions
+# Else random location on tree
+move_h_global <- function(mcmc, data, biassed = T){
   # Choose random host with ancestor
   i <- sample(2:mcmc$n, 1)
 
@@ -461,7 +466,12 @@ move_h_global <- function(mcmc, data){
   }
 
   # "Score" the choices: shared iSNV = +1
-  scores <- softmax(sapply(choices, score, mcmc=mcmc, i=i), data$tau)
+  if(biassed){
+    scores <- softmax(sapply(choices, score, mcmc=mcmc, i=i), data$tau)
+  }else{
+    scores <- rep(1/length(choices), length(choices))
+  }
+
 
   h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = scores))
 
@@ -500,7 +510,12 @@ move_h_global <- function(mcmc, data){
   }
 
   # Scores for proposing the move in the opposite direction
-  rev_scores <- softmax(sapply(choices, score, mcmc=prop, i=i), data$tau)
+  if(biassed){
+    rev_scores <- softmax(sapply(choices, score, mcmc=prop, i=i), data$tau)
+  }else{
+    rev_scores <- rep(1/length(choices), length(choices))
+  }
+
   hastings <- hastings + log(rev_scores[which(choices == h_old)]) - log(scores[which(choices == h_new)])
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, js)))
@@ -586,45 +601,87 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
 
 
 ## Create / remove a node
-move_create <- function(mcmc, data){
+move_create <- function(mcmc, data, upstream = T){
 
   hastings <- 0
 
-  # Probability of picking a node as ancestor to new node
+  if(upstream){
 
-  prob_h <- p_pick_h(mcmc, data)
+    # Probability of picking a node as ancestor to new node
+    prob_h <- p_pick_h(mcmc, data)
 
-  if(sum(prob_h) == 0){
-    return(mcmc)
-  }
+    if(sum(prob_h) == 0){
+      return(mcmc)
+    }
 
-  prob_h <- prob_h / sum(prob_h)
+    prob_h <- prob_h / sum(prob_h)
 
-  # Sample h proportional to ds
-  h <- sample(1:mcmc$n, 1, prob = prob_h)
+    # Sample h proportional to ds
+    h <- sample(1:mcmc$n, 1, prob = prob_h)
 
-  # log P(old -> new): P(choose h)
-  hastings <- hastings - log(prob_h[h])
+    ## Term 1a
+    # log P(old -> new): P(choose h)
+    hastings <- hastings - log(prob_h[h])
 
-  # Pick who moves
-  # Number of people to move is uniform over valid choices
-  min_n_move <- 2
-  if(h > data$n_obs){
-    max_n_move <- sum(mcmc$h[2:mcmc$n] == h) - 1
+    # Pick who moves
+    # Number of people to move is uniform over valid choices
+    min_n_move <- 2
+    if(h > data$n_obs){
+      max_n_move <- sum(mcmc$h[2:mcmc$n] == h) - 1
+    }else{
+      max_n_move <- sum(mcmc$h[2:mcmc$n] == h)
+    }
+
+
   }else{
-    max_n_move <- sum(mcmc$h[2:mcmc$n] == h)
+
+    # Choose any host with ancestor
+    j1 <- sample(2:mcmc$n, 1)
+
+    ## Term 1b
+    hastings <- hastings - log(1 / (mcmc$n - 1)) # P(old to new): pick host j1
+
+    # Old ancestor
+    h <- mcmc$h[j1]
+
+    # Children of j1
+    ks <- which(mcmc$h == j1)
+
+    # Minimum number of the ks to move onto the new node is always 1, since j1 itself is a child of i
+    min_n_move <- 1
+
+    # Max we can move is all of the ks if j1 is observed, or all but 2 if not
+    if(j1 <= data$n_obs){
+      max_n_move <- length(ks)
+    }else{
+      max_n_move <- length(ks) - 2
+    }
+
+    if(min_n_move > max_n_move){
+      return(mcmc)
+    }
   }
 
   n_move <- ifelse(min_n_move == max_n_move, min_n_move, sample(min_n_move:max_n_move, 1))
+
+  ## Term 2
   hastings <- hastings - log(1 / (max_n_move - min_n_move + 1))
 
 
+  if(upstream){
+    # Who moves?
+    js <- which(mcmc$h == h)
 
-  # Who moves?
-  js <- which(mcmc$h == h)
-  hastings <- hastings + lchoose(length(js), n_move) # P(old to new): pick who moves
+    ## Term 3a
+    hastings <- hastings + lchoose(length(js), n_move) # P(old to new): pick who moves. (1 / length(js) choose n_move)
+    js <- sample(js, n_move, replace = FALSE)
+  }else{
 
-  js <- sample(js, n_move, replace = FALSE)
+    ## Term 3b
+    hastings <- hastings + lchoose(length(ks), n_move) # P(old to new): pick who moves. (1 / length(ks) choose n_move)
+    ks <- ifelse(length(ks) == 1, ks, sample(ks, n_move, replace = FALSE))
+    js <- c(j1, ks) # Now, these are the children of i
+  }
 
   # New node index
   i <- mcmc$n + 1
@@ -650,13 +707,21 @@ move_create <- function(mcmc, data){
   prop$isnv$call[[i]] <- character(0)
   prop$isnv$af[[i]] <- numeric(0)
 
-  ## Move all js onto i
-  for (j in js) {
-    prop <- shift_upstream(prop, data, j, h, i)
+  if(upstream){
+    ## Move all js onto i
+    for (j in js) {
+      prop <- shift_upstream(prop, data, j, h, i)
+    }
+  }else{
+    prop <- shift_upstream(prop, data, j1, h, i)
+    for (k in ks) {
+      prop <- shift_downstream(prop, data, k, j1, i)
+    }
   }
 
   # Get genotype for i
   prop <- genotype(prop, data, i)
+  # Term 4
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
@@ -665,22 +730,28 @@ move_create <- function(mcmc, data){
   min_t <- prop$seq[[h]][1]
 
   prop$seq[[i]] <- runif(1, min_t, max_t)
+  # Term 5
   hastings <- hastings - log(1 / (max_t - min_t))
 
   # Then, resample seq again, fixing its first element
   prop <- resample_seq(prop, data, i, fix_latest_host = TRUE)
+  # Term 6
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
   # Finally, resample seq for j. Also fix latest host, so we don't have to update g_lik for children of j
   for (j in js) {
     prop <- resample_seq(prop, data, j, fix_latest_host = TRUE)
+    # Terms 7
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
   }
 
   ## For the move in the reverse direction: we need to pick i as the node to remove, and sample seq for js
+  # Reverses Term 1 below
   hastings <- hastings + log(1 / (prop$n - data$n_obs)) # P(new to old): pick i as the host to remove
+
+  # Reverses Terms 2 below
   for (j in js) {
     hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old")
   }
@@ -689,8 +760,9 @@ move_create <- function(mcmc, data){
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h, js)))
 }
 
+# upstream = T here reverses move_create(... upstream = T) and vice versa
 
-move_delete <- function(mcmc, data){
+move_delete <- function(mcmc, data, upstream = T){
 
   # If no unobserved nodes, nothing to do here
   if(mcmc$n == data$n_obs){
@@ -701,33 +773,56 @@ move_delete <- function(mcmc, data){
 
   # Who to delete
   choices <- (data$n_obs + 1):(mcmc$n)
+  # Term 1
   hastings <- hastings - log(1 / length(choices)) # P(old to new): pick host to delete
 
   i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
   h <- mcmc$h[i]
   js <- which(mcmc$h == i)
 
+  if(!upstream){
+    ts <- sapply(mcmc$seq[js], function(v){v[1]})
+    j1 <- js[which.min(ts)]
+    ks <- setdiff(js, j1)
+  }
+
   ## Some initial updates to hastings ratio: time of mcmc$seq[[i]][1], rest of mcmc$seq[[i]], mcmc$seq[[j]], and genotype at i
   max_t <- get_max_t(mcmc, data, i, fix_child_seq = FALSE)
   min_t <- mcmc$seq[[h]][1]
+  # Reverses Term 5 above
   hastings <- hastings + log(1 / (max_t - min_t))
 
-  # seq[[i]]
+  # Reverses Term 6 above
   hastings <- hastings + resample_seq(mcmc, data, i, fix_latest_host = TRUE, output = "log_p_new_old")
 
-  # each seq[[j]]
+  # Reverse Terms 7 above
   for (j in js) {
     hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old")
   }
 
   # Genotype at i
+  # Reverses Term 4 above
   hastings <- hastings + genotype(mcmc, data, i, output = "log_p_new_old")
 
   prop <- mcmc
 
+
+  if(upstream){
+    for (j in js) {
+      prop <- shift_downstream(prop, data, j, i, h)
+    }
+  }else{
+    for (k in ks) {
+      prop <- shift_upstream(prop, data, k, i, j1)
+    }
+    prop <- shift_downstream(prop, data, j1, i, h)
+
+  }
+
+
+  # Resample seq for js (or j1 and ks)
+  # Terms 2
   for (j in js) {
-    prop <- shift_downstream(prop, data, j, i, h)
-    # Resample seq for j
     prop <- resample_seq(prop, data, j, fix_latest_host = TRUE)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
@@ -761,36 +856,66 @@ move_delete <- function(mcmc, data){
     h <- h - 1
   }
 
-  ## For hastings ratio: probability of picking h and js
-  prob_h <- p_pick_h(prop, data)
-
-  if(sum(prob_h) == 0){
-    print(mcmc$h)
-    print(prop$h)
-    print(prop$external_roots)
-    print("Whaaaa?")
+  if(!upstream){
+    ks[ks > i] <- ks[ks > i] - 1
+    if(j1 > i){
+      j1 <- j1 - 1
+    }
   }
 
-  prob_h <- prob_h / sum(prob_h)
+  if(upstream){
+    ## For hastings ratio: probability of picking h and js
+    prob_h <- p_pick_h(prop, data)
 
-  # log P(new -> old): P(choose h)
-  hastings <- hastings + log(prob_h[h])
+    if(sum(prob_h) == 0){
+      print(mcmc$h)
+      print(prop$h)
+      print(prop$external_roots)
+      print("Whaaaa?")
+    }
 
-  # Pick who moves
-  # Number of people to move is uniform over valid choices
-  min_n_move <- 2
-  if(h > data$n_obs){
-    max_n_move <- sum(prop$h[2:prop$n] == h) - 1
+    prob_h <- prob_h / sum(prob_h)
+
+    # log P(new -> old): P(choose h)
+    # Reverses Term 1a
+    hastings <- hastings + log(prob_h[h])
+
+    # Pick who moves
+    # Number of people to move is uniform over valid choices
+    min_n_move <- 2
+    if(h > data$n_obs){
+      max_n_move <- sum(prop$h[2:prop$n] == h) - 1
+    }else{
+      max_n_move <- sum(prop$h[2:prop$n] == h)
+    }
+
+    # Reverse Terms 2, 3
+    hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
+    hastings <- hastings - lchoose(sum(prop$h[2:prop$n] == h), length(js)) # P(new to old): pick who moves
   }else{
-    max_n_move <- sum(prop$h[2:prop$n] == h)
+
+
+    # Probability of choosing j1
+    # Reverses term 1b
+    hastings <- hastings + log(1 / (prop$n - 1))
+
+    # Minimum number of the ks to move onto the new node is always 1, since j1 itself is a child of i
+    min_n_move <- 1
+
+    # Max we can move is all of the ks if j1 is observed, or all but 2 if not
+    if(j1 <= data$n_obs){
+      max_n_move <- sum(prop$h[2:prop$n] == j1)
+    }else{
+      max_n_move <- sum(prop$h[2:prop$n] == j1) - 2
+    }
+
+    # Reverse Terms 2, 3
+    hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
+    hastings <- hastings - lchoose(sum(prop$h[2:prop$n] == j1), length(ks)) # P(new to old): pick who moves
+
   }
-
-  hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
-  hastings <- hastings - lchoose(sum(prop$h[2:prop$n] == h), length(js)) # P(new to old): pick who moves
-
 
   update <- js
-
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h, js)))
 
