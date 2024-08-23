@@ -211,7 +211,7 @@ move_mu <- function(mcmc, data){
 move_p <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$p <- rnorm(1, mcmc$p, data$init_mu / 50)
+  prop$p <- rnorm(1, mcmc$p, data$init_p / 5)
   update <- 2:mcmc$n
   return(accept_or_reject(prop, mcmc, data, update))
 }
@@ -518,7 +518,7 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   hastings <- hastings + log(rev_scores[which(choices == h_old)]) - log(scores[which(choices == h_new)])
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, js), noisy = !biassed))
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, js)))
 
 }
 

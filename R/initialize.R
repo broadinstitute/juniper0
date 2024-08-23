@@ -47,6 +47,7 @@ initialize <- function(
     R = 1, # Reproductive number (average over entire outbreak)
     growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
     init_mu = 1e-5,
+    init_p = 1e-6,
     fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
     experimental = TRUE
 ){
@@ -327,7 +328,7 @@ initialize <- function(
   data$vcf_present <- vcf_present
   data$rooted <- rooted
   data$init_mu <- init_mu
-  data$init_p <- init_mu / 10
+  data$init_p <- init_p
   data$fixed_mu <- fixed_mu
   data$names <- names
 
