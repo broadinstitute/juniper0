@@ -1030,3 +1030,340 @@
 # #   }
 # }
 #
+# Number of total cases created over an interval of length delta_t
+# tot_cases <- function(mcmc, delta_t){
+#   if(mcmc$R == 1){
+#     (delta_t / (mcmc$a_g / mcmc$lambda_g)) + 1
+#   }else{
+#     (mcmc$R^((delta_t / (mcmc$a_g / mcmc$lambda_g)) + 1) - 1) / (mcmc$R - 1)
+#   }
+# }
+
+# Probability not sampled in 0, 1, ..., g_max generations
+# alpha_gs <- function(mcmc, g_max){
+#   out <- 1 - mcmc$alpha
+#   for (i in 1:g_max) {
+#     if(is.infinite(mcmc$rho)){
+#       out <- c(
+#         out,
+#         (1 - mcmc$alpha) * exp(R * (out[i] - 1))
+#       )
+#
+#     }else{
+#       out <- c(
+#         out,
+#         (1 - mcmc$alpha) * (1 + out[i] * (mcmc$psi - 1))^(-mcmc$rho) * mcmc$psi^mcmc$rho
+#       )
+#     }
+#   }
+#   out
+# }
+#
+# # log probability none of the cases created over an interval of length delta_t are sampled
+# log_p_unsampled <- function(mcmc, delta_t){
+#   tot_cases(mcmc, delta_t) * log(1 - mcmc$alpha)
+# }
+
+# Approximate parsimony tree
+# split_cluster <- function(cluster, past_muts, id){
+#
+#   # Mutations in cluster
+#   muts <- table(unlist(mcmc$m01[cluster]))
+#
+#   # Get rid of those that are already accounted for
+#   muts <- muts[!(names(muts) %in% past_muts)]
+#
+#   # If no more mutations, nothing to do!
+#   if(length(muts) == 0){
+#     return(
+#       list(
+#         list(
+#           cluster,
+#           past_muts,
+#           id
+#         )
+#       )
+#     )
+#   }else{
+#     # Best mutation at which to split
+#     mut <- names(which.max(muts))
+#
+#     # Who in the cluster has the mutation?
+#     who <- cluster[which(sapply(cluster, function(i){mut %in% mcmc$m01[[i]]}))]
+#
+#     # If it's everyone, run split_cluster again, now updating past_muts
+#     if(length(who) == length(cluster)){
+#       return(
+#         split_cluster(who, c(past_muts, mut), id)
+#       )
+#     }else{
+#       # Return a list of the two resulting clusters from the split
+#       return(
+#         c(
+#           list(
+#             list(
+#               cluster,
+#               past_muts,
+#               id
+#             )
+#           ),
+#           split_cluster(setdiff(cluster, who), past_muts, c(id, "A")),
+#           split_cluster(who, c(past_muts, mut), c(id, "B"))
+#         )
+#       )
+#     }
+#   }
+# }
+# Flip the genotype for a SNV
+# flip_genotype <- function(mcmc, i, js, snv){
+#   prop <- mcmc
+#   ## Run through cases of updating genetic info in i
+#   if(snv %in% mcmc$m01[[i]]){
+#
+#     # Delete from 01 in i
+#     prop$m01[[i]] <- setdiff(mcmc$m01[[i]], snv)
+#
+#     # Note that we're changing from 1 to 0 in i
+#     add <- FALSE
+#   }else if(snv %in% mcmc$mx1[[i]]){
+#
+#     # Delete from x1 in i
+#     prop$mx1[[i]] <- setdiff(mcmc$mx1[[i]], snv)
+#
+#     # Union to x0 in i
+#     prop$mx0[[i]] <- union(mcmc$mx0[[i]], snv)
+#
+#     # Note that we're changing from 1 to 0 in i
+#     add <- FALSE
+#   }else if(snv %in% mcmc$m10[[i]]){
+#
+#     # Delete from 01 in i
+#     prop$m10[[i]] <- setdiff(mcmc$m10[[i]], snv)
+#
+#     # Note that we're changing from 0 to 1 in i
+#     add <- TRUE
+#   }else if(snv %in% mcmc$mx0[[i]]){
+#
+#     # Delete from x1 in i
+#     prop$mx0[[i]] <- setdiff(mcmc$mx0[[i]], snv)
+#
+#     # Union to x0 in i
+#     prop$mx1[[i]] <- union(mcmc$mx1[[i]], snv)
+#
+#     # Note that we're changing from 0 to 1 in i
+#     add <- TRUE
+#   }else if(snv %in% c(unlist(mcmc$m10[js]), unlist(mcmc$m1y[js]))){ # 11 in i
+#
+#     # Union to 10 in i
+#     prop$m10[[i]] <- union(mcmc$m10[[i]], snv)
+#
+#     add <- FALSE
+#   }else if(snv %in% c(unlist(mcmc$m01[js]), unlist(mcmc$m0y[js]))){ # 00 in i
+#
+#     # Union to 01 in i
+#     prop$m01[[i]] <- union(mcmc$m01[[i]], snv)
+#
+#     add <- TRUE
+#   }else{
+#     # In the final case, we need to search the ancestry of i to determine whether the SNV is present or absent
+#     h <- mcmc$h[i]
+#     add <- T
+#     while (h != 1) {
+#       if(snv %in% c(unlist(mcmc$m01[[h]]), unlist(mcmc$mx1[[h]]))){
+#         add <- F
+#         break
+#       }else{
+#         h <- mcmc$h[h]
+#       }
+#     }
+#     if(add){
+#       # Union to 01 in i
+#       prop$m01[[i]] <- union(mcmc$m01[[i]], snv)
+#     }else{
+#       # Union to 10 in i
+#       prop$m10[[i]] <- union(mcmc$m10[[i]], snv)
+#     }
+#   }
+#
+#   ## Now update genetic info for j in js
+#   if(add){
+#     for (j in js) {
+#       if(snv %in% mcmc$m01[[j]]){
+#         # Delete from 01 in j
+#         prop$m01[[j]] <- setdiff(mcmc$m01[[j]], snv)
+#       }else if(snv %in% mcmc$m0y[[j]]){
+#         # Delete from 0y in j
+#         prop$m0y[[j]] <- setdiff(mcmc$m0y[[j]], snv)
+#         # Add to 1y in j
+#         prop$m1y[[j]] <- union(mcmc$m1y[[j]], snv)
+#       }else{
+#         # Otherwise, it was in 00 in j
+#         prop$m10[[j]] <- union(mcmc$m10[[j]], snv)
+#       }
+#     }
+#   }else{
+#     for (j in js) {
+#       if(snv %in% mcmc$m10[[j]]){
+#         # Delete from 10 in j
+#         prop$m10[[j]] <- setdiff(mcmc$m10[[j]], snv)
+#       }else if(snv %in% mcmc$m0y[[j]]){
+#         # Delete from 1y in j
+#         prop$m1y[[j]] <- setdiff(mcmc$m1y[[j]], snv)
+#         # Add to 0y in j
+#         prop$m0y[[j]] <- union(mcmc$m0y[[j]], snv)
+#       }else{
+#         # Otherwise, it was in 11 in j
+#         prop$m01[[j]] <- union(mcmc$m01[[j]], snv)
+#       }
+#     }
+#   }
+#
+#   return(prop)
+# }
+
+
+
+### Initialize to (approximate) parsimony tree
+# if(FALSE){
+#   pars <- split_cluster(2:n, character(0), character(0))
+#
+#   # For each entry of "pars", who is its ancestor?
+#   pars_anc <- NA
+#   # Mutations added since ancestor
+#   added <- list(character(0))
+#   for (i in 2:length(pars)) {
+#     id <- pars[[i]][[3]]
+#     if(length(id) == 1){
+#       anc_id <- character(0)
+#     }else{
+#       anc_id <- id[1:(length(id) - 1)]
+#     }
+#
+#     for (j in i:1) { # Probably faster to reverse order of inner for loop
+#       if(identical(anc_id, pars[[j]][[3]])){
+#         pars_anc[i] <- j
+#         break
+#       }
+#     }
+#
+#     added[[i]] <- setdiff(pars[[i]][[2]], pars[[pars_anc[i]]][[2]])
+#   }
+#
+#   # Which nodes are terminal?
+#   terminal <- which(!(1:length(pars) %in% pars_anc))
+#
+#   # "pars" is a list of length length(pars).
+#   # For certain elements of this list, we need to create a new unobserved host, which will be assigned some id.
+#   # We track that with this vector:
+#   new_hosts <- rep(NA, length(pars))
+#
+#   # Loop through each entry in "pars" and update transmission tree
+#   for (k in 1:length(pars)) {
+#
+#     if(!(k %in% terminal)){
+#
+#       # Increase n
+#       mcmc$n <- mcmc$n + 1
+#       i <- mcmc$n
+#
+#       new_hosts[k] <- i
+#
+#       if(k == 1){
+#         mcmc$h[i] <- 1
+#
+#         mcmc$m01[[i]] <- setdiff(
+#           added[[k]],
+#           snvs[[1]]$isnv$call
+#         )
+#
+#         mcmc$m10[[i]] <- character(0)
+#
+#         mcmc$m0y <- character(0)
+#         mcmc$m1y[[i]] <- character(0)
+#         mcmc$mx0[[i]] <- setdiff(
+#           snvs[[1]]$isnv$call,
+#           union(
+#             snvs[[i]]$snv$call,
+#             snvs[[i]]$isnv$call
+#           )
+#         )
+#         mcmc$mx1[[i]] <- intersect(
+#           snvs[[1]]$isnv$call,
+#           snvs[[i]]$snv$call
+#         )
+#         if(i==1){
+#           mcmc$mxy[[i]] <- character(0)
+#         }else{
+#           mcmc$mxy[[i]] <- intersect(
+#             snvs[[1]]$isnv$call,
+#             snvs[[i]]$isnv$call
+#           )
+#         }
+#
+#       }else{
+#         mcmc$h[i] <- new_hosts[pars_anc[k]]
+#
+#       }
+#     }
+#   }
+# }
+# Get whether someone is observed, in unlisted form
+# get_obs <- function(mcmc, data, i){
+#   if(i <= data$n_obs){
+#     c(T, rep(F, mcmc$w[i]))
+#   }else{
+#     rep(F, mcmc$w[i] + 1)
+#   }
+# }
+
+## Get list of all nodes upstream from a given node (including indirectly)
+# We can do this using recursion!
+# get_upstream <- function(h, i){
+#   out <- which(h == i)
+#   for (j in out) {
+#     out <- c(out, get_upstream(h, j))
+#   }
+#   return(out)
+# }
+#
+# ## Efficiently compute total number of upstream nodes for each node (including self)
+# total_degree <- function(h, d){
+#   n <- length(h)
+#   out <- rep(1, length(h))
+#   frontier <- which(d == 0)
+#
+#   while (length(frontier) > 0 & !identical(frontier, 1)) {
+#     new_frontier <- c()
+#     for (i in frontier) {
+#       out[h[i]] <- out[h[i]] + out[i] # Back up degree into parent
+#       d[h[i]] <- d[h[i]] - 1 # Prune child
+#       if(d[h[i]] == 0){
+#         if(!is.na(h[i])){
+#           new_frontier <- c(new_frontier, h[i])
+#         }
+#       }
+#     }
+#     frontier <- new_frontier
+#     if(length(frontier) == 1){
+#       if(frontier == 1){
+#         frontier <- integer(0)
+#       }
+#     }
+#   }
+#
+#   return(out)
+# }
+
+# Get generation of each node
+# gen2 <- function(mcmc){
+#   ord <- bfs(1,mcmc$h)
+#   out <- rep(NA, mcmc$n)
+#   for (i in ord) {
+#     if(i == 1){
+#       out[i] <- 0
+#     }else{
+#       out[i] <- out[mcmc$h[i]] + mcmc$w[i] + 1
+#     }
+#   }
+#   return(out)
+# }

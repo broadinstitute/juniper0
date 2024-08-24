@@ -17,9 +17,8 @@
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
 #' @param a_s Shape parameter, sojourn interval. Defaults to 5.
 #' @param lambda_s Rate parameter, sojourn interval. Defaults to 1.
-#' @param rho Overdispersion parameter. Defaults to Inf, indicating the offspring distribution is Poisson.
-#' @param R Reproductive number (average over entire outbreak). Defaults to 1. Exactly one of R and growth may be specified; the other must be set to NULL.
-#' @param growth Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.
+#' @param R Reproductive number (average over entire outbreak). Defaults to 2.
+#' @param psi Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
 #' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.
 #' @return The initial configuration of the Markov Chain.
@@ -43,49 +42,12 @@ initialize <- function(
     lambda_g = 1, # Rate parameter, generation interval
     a_s = 5, # Shape parameter, sojourn interval
     lambda_s = 1, # Rate parameter, sojourn interval
-    rho = Inf, # Overdispersion parameter (Inf indicates Poisson distribution)
-    R = 1, # Reproductive number (average over entire outbreak)
-    growth = NULL, # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
-    init_mu = 1e-5,
-    init_p = 1e-6,
-    fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
-    experimental = TRUE
+    R = 2, # Reproductive number (average over entire outbreak)
+    psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
+    init_mu = 2e-5,
+    init_p = 2e-6,
+    fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
 ){
-
-  # n_subtrees = NULL
-  # n_global = 100 # Number of global moves
-  # n_local = 100 # Number of local moves per global move
-  # sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
-  # init_mst = TRUE # Should we initialize to a minimum spanning tree?
-  # init_ancestry = FALSE # Specify the starting ancestry
-  # rooted = TRUE # Is the root of the transmission network fixed at the ref sequence?
-  # N = NA # Population size
-  # record = c("n", "h", "w", "t", "b", "mu", "p") # Which aspects of mcmc do we want to record
-  # filters = NULL
-  # check_names = TRUE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
-  # # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
-  # #virus = "SARS-CoV-2", # Pathogen being studied
-  # a_g = 5 # Shape parameter, generation interval
-  # lambda_g = 1 # Rate parameter, generation interval
-  # a_s = 5 # Shape parameter, sojourn interval
-  # lambda_s = 1 # Rate parameter, sojourn interval
-  # rho = Inf # Overdispersion parameter (Inf indicates Poisson distribution)
-  # R = 1 # Reproductive number (average over entire outbreak)
-  # growth = NULL # Exponential growth rate of cases, i.e. # of cases at time t is exp(growth * t)
-  # init_mu = 1e-5
-  # fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
-
-  # if(!rooted & is.na(N)){
-  #   stop("If the root of the tree is not fixed, N must be specified.")
-  # }
-
-  if((!is.null(R) & !is.null(growth)) | (is.null(R) & is.null(growth))){
-    stop("Exactly one of the inputs R and growth may be specified. The other must be set to NULL.")
-  }else if(!is.null(R)){
-    growth <- log(R) / (a_g / lambda_g)
-  }else if(!is.null(growth)){
-    R <- exp(growth * a_g / lambda_g)
-  }
 
   ## Filters
   if(is.null(filters)){
@@ -312,19 +274,14 @@ initialize <- function(
   data$n_obs <- n # number of observed hosts, plus 1 (index case)
   data$n_bases <- n_bases
   data$snvs <- snvs
-  data$p_move <- 0.6
   data$tau = 0.2
-  #data$n_cores <-
   # Number of subtrees to chop into is n_cores, as long as each subtree has at least 100 people
   data$n_subtrees <- n_subtrees
   data$n_global <- n_global
   data$n_local <- n_local
   data$sample_every <- sample_every
   data$record <- record
-  #data$n_subtrees <- 3
   data$filters <- filters
-  data$growth <- growth
-  data$R <- R
   data$vcf_present <- vcf_present
   data$rooted <- rooted
   data$init_mu <- init_mu
@@ -332,22 +289,11 @@ initialize <- function(
   data$fixed_mu <- fixed_mu
   data$names <- names
 
-  data$all_snv <- unique(all_snv)
-  data$eps <- 0.05 / length(data$all_snv) # When creating a new genotype, algo makes 0.05 explorations per snv
-
   # Later: could move elements of "data" that aren't used in MCMC to a new "config" list
-
-  # Old feature from previous version
-  data$pooled_coalescent = T
-  data$disjoint_coalescent = F
-
-  data$experimental = experimental
 
   mcmc <- list()
   mcmc$n <- n # number of tracked hosts
-  mcmc$h <- rep(1, n) # ancestors; initialized to index case
-  # mcmc$w <- rep(0, n) # edge weights; initialized to 0
-  # mcmc$w[1] <- 0 # For convenience
+  mcmc$h <- rep(1, n)
   mcmc$h[1] <- NA
   mcmc$t <- s - 5 # time of contracting
   mcmc$t[2:n] <- pmax(mcmc$t[2:n], 0.01)
@@ -475,41 +421,16 @@ initialize <- function(
   mcmc$a_s <- a_s # shape parameter of the sojourn interval
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   mcmc$mu <- init_mu
-  mcmc$p <- init_mu / 10
-  mcmc$v <- 1000 # burst size
-  mcmc$v <- exp(1)
-  mcmc$lambda <- 1 # expo growth rate of bursts
-  mcmc$rho <- rho # first parameter, NBin offspring distribution (overdispersion param)
-  # Mean number of cases at time t is R^(t/g) = exp(t * log(R) / g), g mean generation interval
-  # growth = log(R) / g => R = exp(g * growth)
-  mcmc$psi <- mcmc$rho / (data$R + mcmc$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
+  mcmc$p <- init_p
+  mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
+  mcmc$R <- R
 
   mcmc$w <- pmax(round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g))) - 1, 0)
   mcmc$w[1] <- 0
+  mcmc$pi <- 0.2 # Probability of sampling
 
-  if(experimental){
-    mcmc$R <- data$R
-    mcmc$pi <- 0.2 # Probability of sampling
-
-    # Sequence of times at which the hosts along the edge leading into i were sampled
-    mcmc$seq <- lapply(1:n, get_ts, mcmc = mcmc)
-
-    # Inferred iSNVs and their frequencies
-    mcmc$isnv <- list()
-    mcmc$isnv$call <- list()
-    mcmc$isnv$af <- list()
-
-    for (i in 1:n) {
-      mcmc$isnv$call[[i]] <- data$snvs[[i]]$isnv$call
-      mcmc$isnv$af[[i]] <- data$snvs[[i]]$isnv$af
-    }
-  }
-
-
-
-
-  # Functions of MCMC params
-  #mcmc$d <- sapply(1:n, function(x){sum(mcmc$h[2:n] == x)}) # Node degrees
+  # Sequence of times at which the hosts along the edge leading into i were sampled
+  mcmc$seq <- lapply(1:n, get_ts, mcmc = mcmc)
 
   mcmc$t <- NULL
   mcmc$w <- NULL

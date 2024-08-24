@@ -21,12 +21,11 @@ initialize(
   lambda_g = 1,
   a_s = 5,
   lambda_s = 1,
-  rho = Inf,
-  R = 1,
-  growth = NULL,
-  init_mu = 1e-05,
-  fixed_mu = F,
-  experimental = TRUE
+  R = 2,
+  psi = 0.5,
+  init_mu = 2e-05,
+  init_p = 2e-06,
+  fixed_mu = F
 )
 }
 \arguments{
@@ -60,11 +59,9 @@ initialize(
 
 \item{lambda_s}{Rate parameter, sojourn interval. Defaults to 1.}
 
-\item{rho}{Overdispersion parameter. Defaults to Inf, indicating the offspring distribution is Poisson.}
+\item{R}{Reproductive number (average over entire outbreak). Defaults to 2.}
 
-\item{R}{Reproductive number (average over entire outbreak). Defaults to 1. Exactly one of R and growth may be specified; the other must be set to NULL.}
-
-\item{growth}{Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.}
+\item{psi}{Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.}
 
 \item{init_mu}{Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.}
 

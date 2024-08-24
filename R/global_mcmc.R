@@ -24,33 +24,16 @@
 
 global_mcmc <- function(mcmc, data){
 
-  # Move 1
   mcmc <- move_b(mcmc, data)
 
-  #mcmc <- move_a_g(mcmc, data)
-
-  # Move 6
   if(!data$fixed_mu){
     mcmc <- move_mu(mcmc, data)
   }
-  # Move 7
+
   mcmc <- move_p(mcmc, data)
-
-
-  #print("hi")
   mcmc <- move_pi(mcmc, data)
   mcmc <- move_R(mcmc, data)
 
-
-
-  # Move 8
-  #mcmc <- move_v(mcmc, data)
-  #mcmc <- move_lambda(mcmc, data)
-
-  # mcmc <- move_rho(mcmc, data)
-  # mcmc <- move_psi(mcmc, data)
-
-  # We are fixing parameters associated with moves 2-5, 9-10
   return(mcmc)
 }
 
@@ -141,9 +124,6 @@ breakdown <- function(mcmc, data, old_roots){
     if(root != 1){
       datas[[i]]$rooted <- T
     }
-
-    # Degree of roots of other trees needs to be set to 0
-    mcmcs[[i]]$d[datas[[i]]$frozen] <- 0
 
     # e_lik needs to be re-computed based on the smaller set
     mcmcs[[i]]$e_lik <- e_lik(mcmcs[[i]], datas[[i]])

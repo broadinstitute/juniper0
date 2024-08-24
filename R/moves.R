@@ -80,11 +80,8 @@ move_w_t <- function(mcmc, data, recursive = F){
     # Children of is
     js <- setdiff(which(mcmc$h %in% is), is)
 
-    # Earliest ancestor of i
-    h <- is[1]
-
     # Maximum negative change for i
-    min_delta <- mcmc$seq[[1]][1] - mcmc$seq[[h]][length(mcmc$seq[[h]])]
+    min_delta <- mcmc$seq[[1]][1] - mcmc$seq[[is[1]]][1]
 
   }else{
     # Which i do we update
@@ -103,8 +100,16 @@ move_w_t <- function(mcmc, data, recursive = F){
     h <- mcmc$h[i]
 
     # Maximum negative change for i
-    min_delta <- mcmc$seq[[h]][1] - mcmc$seq[[i]][length(mcmc$seq[[i]])]
+    min_delta <- mcmc$seq[[h]][1] - mcmc$seq[[i]][1]
 
+  }
+
+  # Hastings ratio for infection times of js
+  hastings <- 0
+
+  # P(new to old): pick seq for each j and oldest ancestor in is
+  for (j in c(js, is[1])) {
+    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old")
   }
 
   # Change in time of infection for is
@@ -113,12 +118,18 @@ move_w_t <- function(mcmc, data, recursive = F){
   # Make proposal
   prop <- mcmc
 
-  # Update seq
+  # Update seq for is (just adding a fixed value here)
   for (i in is) {
     prop$seq[[i]] <- prop$seq[[i]] + delta
   }
 
-  hastings <- 0
+  # Update seq for js and is[1] randomly
+  for (j in c(js, is[1])) {
+    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE)
+    hastings <- hastings - prop[[3]]
+    prop <- prop[[1]]
+  }
+
   update <- c(is, js)
 
   return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -143,23 +154,6 @@ move_pi <- function(mcmc, data){
   }else{
     update <- 2:mcmc$n
     return(accept_or_reject(prop, mcmc, data, update))
-  }
-
-}
-
-## Update lambda using a N(0,0.5^2) proposal density
-move_lambda <- function(mcmc, data){
-  # Proposal
-  prop <- mcmc
-  prop$lambda <- rnorm(1, mcmc$lambda, 0.5)
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
   }
 }
 
@@ -216,37 +210,6 @@ move_p <- function(mcmc, data){
   return(accept_or_reject(prop, mcmc, data, update))
 }
 
-## Update v using a N(0,100) proposal density (rounded)
-move_v <- function(mcmc, data){
-  # Proposal
-  prop <- mcmc
-  prop$v <- round(rnorm(1, mcmc$v, 1000))
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[2:mcmc$n] <- sapply(2:mcmc$n, g_lik, mcmc = prop, data = data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
-}
-
-## Update rho using a N(0,0.1) proposal density
-move_rho <- function(mcmc, data){
-  # Proposal
-  prop <- mcmc
-  prop$rho <- rnorm(1, mcmc$rho, 0.1)
-  prop$e_lik <- e_lik(prop, data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + prop$prior - mcmc$e_lik - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
-}
-
 ## Update R
 move_R <- function(mcmc, data){
   # Proposal
@@ -255,8 +218,6 @@ move_R <- function(mcmc, data){
   if(prop$R <= 0){
     return(mcmc)
   }else{
-    #prop$psi <- prop$rho / (prop$R + prop$rho)
-    prop$rho <- prop$R * prop$psi / (1 - prop$psi)
     prop$e_lik <- e_lik(prop, data)
     prop$prior <- prior(prop)
 
