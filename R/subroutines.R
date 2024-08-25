@@ -178,15 +178,18 @@ generations <- function(h, i){
 }
 
 # Get approximate time of infection for tracked and untracked hosts leading into a node
-get_ts <- function(mcmc, i){
-  if(i == 1){
-    return(mcmc$t[i])
-  }else{
-    delta_t <- mcmc$t[i] - mcmc$t[mcmc$h[i]]
-    # Increment back in time
-    inc <- delta_t / (mcmc$w[i] + 1)
-    seq(mcmc$t[i], by = -inc, length.out = mcmc$w[i] + 1)
-  }
+get_ts <- function(mcmc, data, i){
+
+  max_t <- get_max_t(mcmc, data, i)
+  min_t <- mcmc$seq[[mcmc$h[i]]][1]
+
+  # Number of hosts along the edge
+  n_hosts <- max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)) - 1), 1)
+
+  delta_t <- mcmc$t[i] - mcmc$t[mcmc$h[i]]
+  # Increment back in time
+  inc <- (max_t - min_t) / (n_hosts + 1)
+  seq(max_t - inc, by = -inc, length.out = n_hosts)
 
 }
 

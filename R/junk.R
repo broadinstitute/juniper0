@@ -1367,3 +1367,93 @@
 #   }
 #   return(out)
 # }
+
+# if(init_mst | init_ancestry){
+#   gens <- generations(init_h, 1)
+#   max_t <- min(s[2:n] - 5)
+#
+#   message("Initializing transmission network...")
+#   progress <- 0
+#   pb = txtProgressBar(min = 0, max = n, initial = 0)
+#   for (g in 2:length(gens)) {
+#     for (i in gens[[g]]) {
+#
+#       if(g >= 3){
+#         anc <- ancestry(init_h, i)
+#         for (j in 2:(length(anc) - 1)) {
+#           mcmc <- update_genetics_upstream(mcmc, i, anc[j])
+#         }
+#       }
+#
+#
+#
+#       progress <- progress + 1
+#       setTxtProgressBar(pb,progress)
+#     }
+#
+#   }
+#   close(pb)
+#   mcmc$h <- init_h
+#
+#   # Initialize time of infection
+#   ord <- rev(bfs(1, mcmc$h))
+#   mcmc$t <- rep(NA, n)
+#   mcmc$t[1] <- 0
+#   for (i in ord) {
+#     mcmc$t[i] <- min(c(data$s[i] - 5, mcmc$t[which(mcmc$h == i)] - 5))
+#   }
+#
+#   if(!rooted){
+#     # Time of infection of ref is arbitrarily early
+#     mcmc$t[1] <- -Inf
+#     data$s[1] <- -Inf
+#   }
+# }
+#
+# # If not rooted, and not already initialized to MST or custom ancestry, initialize root to earliest case
+# if(!rooted & !init_mst & !init_ancestry){
+#   # Earliest case, besides root
+#   earliest <- which.min(s[2:n]) + 1
+#
+#   # Set infection time one generation earlier, to ensure infectious at time of transmission
+#   mcmc$t[earliest] <- mcmc$t[earliest] - (a_g/lambda_g)
+#
+#   # Time of infection of ref is arbitrarily early
+#   mcmc$t[1] <- -Inf
+#   data$s[1] <- -Inf
+#
+#   # Update ancestry
+#   mcmc$h[earliest] <- 1
+#   mcmc$h[setdiff(2:n, earliest)] <- earliest
+#   mcmc$w[earliest] <- Inf
+#
+#   # Update genetics
+#   for (i in setdiff(2:n, earliest)) {
+#     mcmc <- update_genetics_upstream(mcmc, i, earliest)
+#   }
+#
+# }
+#
+# ## For MCMC initialization: minimum spanning tree
+# if(init_mst){
+#
+#   # If unrooted, MST only involves cases 2:n
+#   if(!rooted){
+#     snv_dist <- ape::dist.dna(fasta[2:n], model = "N")
+#   }
+#
+#   tree <- ape::mst(snv_dist)
+#
+#   if(rooted){
+#     init_h <- adj_to_anc(tree, 1)
+#   }else{
+#     init_h <- adj_to_anc(tree, which.min(s[2:n])) + 1
+#     init_h[which.min(s[2:n])] <- 1
+#     init_h <- c(NA, init_h)
+#   }
+#
+# }
+#
+# if(init_ancestry){
+#   init_h <- read.table(paste0("./", indir, "/ancestry.csv"))[,1]
+# }

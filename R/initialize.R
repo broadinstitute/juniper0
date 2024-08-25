@@ -36,7 +36,6 @@ initialize <- function(
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
-    #virus = "SARS-CoV-2", # Pathogen being studied
     indir = "input_data", # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
     a_g = 5, # Shape parameter, generation interval
     lambda_g = 1, # Rate parameter, generation interval
@@ -123,7 +122,6 @@ initialize <- function(
   }else{
     s <- date[,2][match(names, date[,1])]
   }
-  s[1] <- a_s / lambda_s # Placeholder
 
 
   ## List of SNVs present per sample
@@ -243,30 +241,6 @@ initialize <- function(
 
   ### Initialize MCMC and data
 
-  ## For MCMC initialization: minimum spanning tree
-  if(init_mst){
-
-    # If unrooted, MST only involves cases 2:n
-    if(!rooted){
-      snv_dist <- ape::dist.dna(fasta[2:n], model = "N")
-    }
-
-    tree <- ape::mst(snv_dist)
-
-    if(rooted){
-      init_h <- adj_to_anc(tree, 1)
-    }else{
-      init_h <- adj_to_anc(tree, which.min(s[2:n])) + 1
-      init_h[which.min(s[2:n])] <- 1
-      init_h <- c(NA, init_h)
-    }
-
-  }
-
-  if(init_ancestry){
-    init_h <- read.table(paste0("./", indir, "/ancestry.csv"))[,1]
-  }
-
   data <- list()
   data$s <- s
   data$t_max <- max(data$s, na.rm = T)
@@ -295,8 +269,6 @@ initialize <- function(
   mcmc$n <- n # number of tracked hosts
   mcmc$h <- rep(1, n)
   mcmc$h[1] <- NA
-  mcmc$t <- s - 5 # time of contracting
-  mcmc$t[2:n] <- pmax(mcmc$t[2:n], 0.01)
   mcmc$m01 <- list() # fixed mutations added in each transmission link
   mcmc$m10 <- list() # fixed mutations deleted in each transmission link
   mcmc$m0y <- list() # 0% -> y%, 0 < y < 100
@@ -348,73 +320,6 @@ initialize <- function(
     }
   }
 
-
-  if(init_mst | init_ancestry){
-    gens <- generations(init_h, 1)
-    max_t <- min(s[2:n] - 5)
-
-    message("Initializing transmission network...")
-    progress <- 0
-    pb = txtProgressBar(min = 0, max = n, initial = 0)
-    for (g in 2:length(gens)) {
-      for (i in gens[[g]]) {
-
-        if(g >= 3){
-          anc <- ancestry(init_h, i)
-          for (j in 2:(length(anc) - 1)) {
-            mcmc <- update_genetics_upstream(mcmc, i, anc[j])
-          }
-        }
-
-
-
-        progress <- progress + 1
-        setTxtProgressBar(pb,progress)
-      }
-
-    }
-    close(pb)
-    mcmc$h <- init_h
-
-    # Initialize time of infection
-    ord <- rev(bfs(1, mcmc$h))
-    mcmc$t <- rep(NA, n)
-    mcmc$t[1] <- 0
-    for (i in ord) {
-      mcmc$t[i] <- min(c(data$s[i] - 5, mcmc$t[which(mcmc$h == i)] - 5))
-    }
-
-    if(!rooted){
-      # Time of infection of ref is arbitrarily early
-      mcmc$t[1] <- -Inf
-      data$s[1] <- -Inf
-    }
-  }
-
-  # If not rooted, and not already initialized to MST or custom ancestry, initialize root to earliest case
-  if(!rooted & !init_mst & !init_ancestry){
-    # Earliest case, besides root
-    earliest <- which.min(s[2:n]) + 1
-
-    # Set infection time one generation earlier, to ensure infectious at time of transmission
-    mcmc$t[earliest] <- mcmc$t[earliest] - (a_g/lambda_g)
-
-    # Time of infection of ref is arbitrarily early
-    mcmc$t[1] <- -Inf
-    data$s[1] <- -Inf
-
-    # Update ancestry
-    mcmc$h[earliest] <- 1
-    mcmc$h[setdiff(2:n, earliest)] <- earliest
-    mcmc$w[earliest] <- Inf
-
-    # Update genetics
-    for (i in setdiff(2:n, earliest)) {
-      mcmc <- update_genetics_upstream(mcmc, i, earliest)
-    }
-
-  }
-
   mcmc$b <- 0.05 # Probability bottleneck has size >1
   mcmc$a_g <- a_g # shape parameter of the generation interval
   mcmc$lambda_g <- lambda_g # rate parameter of the generation interval. FOR NOW: fixing at 1.
@@ -424,16 +329,12 @@ initialize <- function(
   mcmc$p <- init_p
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
   mcmc$R <- R
-
-  mcmc$w <- pmax(round(((mcmc$t - mcmc$t[mcmc$h]) / (mcmc$a_g / mcmc$lambda_g))) - 1, 0)
-  mcmc$w[1] <- 0
   mcmc$pi <- 0.2 # Probability of sampling
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
-  mcmc$seq <- lapply(1:n, get_ts, mcmc = mcmc)
-
-  mcmc$t <- NULL
-  mcmc$w <- NULL
+  mcmc$seq <- list()
+  mcmc$seq[[1]] <- 0
+  mcmc$seq[2:n] <- lapply(2:n, get_ts, mcmc = mcmc, data = data)
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes

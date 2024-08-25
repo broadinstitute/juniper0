@@ -23,6 +23,10 @@
 ### Prior function and defaults
 
 prior <- function(mcmc, priors = NULL){
+
+  return(0)
+
+
   if(is.null(priors)){
     priors <- list()
   }
@@ -155,9 +159,6 @@ prior <- function(mcmc, priors = NULL){
   #   priors$lambda(mcmc$lambda) #+
   #   #priors$rho(mcmc$rho) +
   #   #priors$psi(mcmc$psi)
-
-  0
-
 }
 
 
