@@ -552,38 +552,137 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
 
 
 ## Create / remove a node
-move_create <- function(mcmc, data, upstream = T){
+## If upstream = TRUE, we have a biassed option, in which we create a node that tries to destroy homoplasies
+
+move_create <- function(mcmc, data, upstream = T, biassed = F){
+
+  if(!upstream & biassed){
+    stop("A biassed create move is only allowed when upstream = TRUE")
+  }
 
   hastings <- 0
 
   if(upstream){
 
-    # Probability of picking a node as ancestor to new node
-    prob_h <- p_pick_h(mcmc, data)
+    if(biassed){
+      # All positions that change across the whole dataset and how many times, minus 1
+      n_changes <- table(unlist(mcmc$subs$pos)) - 1
 
-    if(sum(prob_h) == 0){
-      return(mcmc)
-    }
+      # If all 0, we can't make a biassed move, so just make the normal move where we pick two random hosts
+      # Also make this move with probability 5%, to ensure reversibility
+      # HASTINGS CODE: Terms B1
+      if(all(n_changes == 0) | runif(1) < 0.05){
+        if(!all(n_changes == 0)){
+          hastings <- hastings - log(0.05)
+        }
 
-    prob_h <- prob_h / sum(prob_h)
+        # Sample any two js
+        hastings <- hastings + lchoose(mcmc$n - 1, 2)
+        js <- sample(2:mcmc$n, 2, replace = F)
 
-    # Sample h proportional to ds
-    h <- sample(1:mcmc$n, 1, prob = prob_h)
+      }else{
 
-    ## Term 1a
-    # log P(old -> new): P(choose h)
-    hastings <- hastings - log(prob_h[h])
+        hastings <- hastings - log(0.95)
 
-    # Pick who moves
-    # Number of people to move is uniform over valid choices
-    min_n_move <- 2
-    if(h > data$n_obs){
-      max_n_move <- sum(mcmc$h[2:mcmc$n] == h) - 1
+        # Find the positions with nonzero homoplasies
+        n_changes <- n_changes[n_changes > 0]
+
+        # Position numbers
+        pos_nos <- as.numeric(names(n_changes))
+
+        # For each position number, get a list of the js that have a mutation at that position
+        js_by_pos <- list()
+        for (p in 1:length(pos_nos)) {
+          js_by_pos[[p]] <- which(sapply(mcmc$subs$pos, function(v){pos_nos[p] %in% v}))
+        }
+
+        # Sample a position for which to create new host with that mutation
+        if(length(js_by_pos) == 1){
+          js <- js_by_pos[[1]]
+        }else{
+          js <- js_by_pos[[sample(1:length(js_by_pos), 1)]]
+        }
+
+        if(length(js) > 2){
+          # Then resample to get any two of them. We will only move two people tops
+          hastings <- hastings + lchoose(length(js), 2)
+          js <- sample(js, 2, replace = FALSE)
+        }
+
+        # Probability of picking js
+        p_pick_js <- 0
+        for (p in 1:length(js_by_pos)) {
+          if(all(js %in% js_by_pos[[p]])){
+            p_pick_js <- p_pick_js +
+              (1 / length(js_by_pos)) * # Probability of picking index p
+              (1 / choose(length(js_by_pos[[p]]), 2)) # Probability of picking the specific js
+          }
+        }
+        hastings <- hastings - log(p_pick_js)
+      }
+
+
+
+      if(length(js) == 1){
+        stop("Not moving enough js...")
+      }
+
+      # ancestors of js, if unobserved, must have degree at least 3
+      # or if the ancestors are the same, need degree at least 4
+      if(mcmc$h[js[1]] == mcmc$h[js[2]]){
+        if(mcmc$h[js[1]] > data$n_obs){
+          if(length(which(mcmc$h == mcmc$h[js[1]])) < 4){
+            return(mcmc)
+          }
+        }
+      }else{
+        # Ancestors are different
+        if(mcmc$h[js[1]] > data$n_obs){
+          if(length(which(mcmc$h == mcmc$h[js[1]])) < 3){
+            return(mcmc)
+          }
+        }
+        if(mcmc$h[js[2]] > data$n_obs){
+          if(length(which(mcmc$h == mcmc$h[js[2]])) < 3){
+            return(mcmc)
+          }
+        }
+      }
+
+      # Get MRCA of all the js
+      h <- mrca(mcmc$h, js)
+
+      # Also reject if mrca equals any of the js
+      if(h %in% js){
+        return(mcmc)
+      }
+
     }else{
-      max_n_move <- sum(mcmc$h[2:mcmc$n] == h)
+      # Probability of picking a node as ancestor to new node
+      prob_h <- p_pick_h(mcmc, data)
+
+      if(sum(prob_h) == 0){
+        return(mcmc)
+      }
+
+      prob_h <- prob_h / sum(prob_h)
+
+      # Sample h proportional to ds
+      h <- sample(1:mcmc$n, 1, prob = prob_h)
+
+      ## Term 1a
+      # log P(old -> new): P(choose h)
+      hastings <- hastings - log(prob_h[h])
+
+      # Pick who moves
+      # Number of people to move is uniform over valid choices
+      min_n_move <- 2
+      if(h > data$n_obs){
+        max_n_move <- sum(mcmc$h[2:mcmc$n] == h) - 1
+      }else{
+        max_n_move <- sum(mcmc$h[2:mcmc$n] == h)
+      }
     }
-
-
   }else{
 
     # Choose any host with ancestor
@@ -613,26 +712,30 @@ move_create <- function(mcmc, data, upstream = T){
     }
   }
 
-  n_move <- ifelse(min_n_move == max_n_move, min_n_move, sample(min_n_move:max_n_move, 1))
+  if(!biassed){
+    n_move <- ifelse(min_n_move == max_n_move, min_n_move, sample(min_n_move:max_n_move, 1))
 
-  ## Term 2
-  hastings <- hastings - log(1 / (max_n_move - min_n_move + 1))
+    ## Term 2
+    hastings <- hastings - log(1 / (max_n_move - min_n_move + 1))
 
 
-  if(upstream){
-    # Who moves?
-    js <- which(mcmc$h == h)
+    if(upstream){
+      # Who moves?
+      js <- which(mcmc$h == h)
 
-    ## Term 3a
-    hastings <- hastings + lchoose(length(js), n_move) # P(old to new): pick who moves. (1 / length(js) choose n_move)
-    js <- sample(js, n_move, replace = FALSE)
-  }else{
+      ## Term 3a
+      hastings <- hastings + lchoose(length(js), n_move) # P(old to new): pick who moves. (1 / length(js) choose n_move)
+      js <- sample(js, n_move, replace = FALSE)
+    }else{
 
-    ## Term 3b
-    hastings <- hastings + lchoose(length(ks), n_move) # P(old to new): pick who moves. (1 / length(ks) choose n_move)
-    ks <- ifelse(length(ks) == 1, ks, sample(ks, n_move, replace = FALSE))
-    js <- c(j1, ks) # Now, these are the children of i
+      ## Term 3b
+      hastings <- hastings + lchoose(length(ks), n_move) # P(old to new): pick who moves. (1 / length(ks) choose n_move)
+      ks <- ifelse(length(ks) == 1, ks, sample(ks, n_move, replace = FALSE))
+      js <- c(j1, ks) # Now, these are the children of i
+    }
   }
+
+
 
   # New node index
   i <- mcmc$n + 1
@@ -650,7 +753,35 @@ move_create <- function(mcmc, data, upstream = T){
 
   prop$tmu[[i]] <- numeric(0)
 
+
+
   if(upstream){
+
+    if(biassed){
+      # If biassed, we first need to get each j down onto h
+      # We also need to update the hastings ratio based on the number of choices for where to move j at each step, for the move in the reverse direction
+      for (j in js) {
+
+        # HASTINGS CODE: Reverses terms B2 below
+
+        # Probability that we stop moving j when we reach its current ancestor
+        # See below comment on this probability
+        n_kids <- length(setdiff(which(prop$h == prop$h[j]), c(i, js)))
+        hastings <- hastings + log(1 / (n_kids + 1))
+
+        while(prop$h[j] != h){
+          prop <- shift(prop, data, j, prop$h[j], prop$h[prop$h[j]], F)
+
+          # P(new -> old), so the factor is positive
+          # Idea is that if you have c children, the probability of moving to any one of them is 1 / (c+1), and the probability of staying put is also 1 / (c+1)
+          # Can't move one j onto another j, or onto i
+
+          n_kids <- length(setdiff(which(prop$h == prop$h[j]), c(i, js)))
+          hastings <- hastings + log(1 / (n_kids + 1))
+        }
+      }
+    }
+
     ## Move all js onto i
     for (j in js) {
       prop <- shift(prop, data, j, h, i, upstream = T)
@@ -671,6 +802,8 @@ move_create <- function(mcmc, data, upstream = T){
   prop$seq[[i]] <- runif(1, min_t, max_t)
   # Term 5
   hastings <- hastings - log(1 / (max_t - min_t))
+
+
 
   # Then, resample seq again, fixing its first element
   prop <- resample_seq(prop, data, i, fix_latest_host = TRUE, also_resample_tmu = FALSE)
@@ -696,9 +829,17 @@ move_create <- function(mcmc, data, upstream = T){
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
+
+
   ## For the move in the reverse direction: we need to pick i as the node to remove, and sample seq for js
   # Reverses Term 1 below
-  hastings <- hastings + log(1 / (prop$n - data$n_obs)) # P(new to old): pick i as the host to remove
+  if(biassed){
+    # P(new to old): pick i as the host to remove, among unobserved hosts with degree 2
+    ds <- sapply((data$n_obs + 1):prop$n, function(x){length(which(prop$h == x))})
+    hastings <- hastings + log(1 / sum(ds == 2))
+  }else{
+    hastings <- hastings + log(1 / (prop$n - data$n_obs)) # P(new to old): pick i as the host to remove
+  }
 
   # Reverses Terms 2 below
   for (j in js) {
@@ -706,18 +847,31 @@ move_create <- function(mcmc, data, upstream = T){
   }
 
   if(upstream){
-    update <- c(h, i)
+    if(biassed){
+      update <- unique(c(h, i, mcmc$h[js]))
+    }else{
+      update <- c(h, i)
+    }
   }else{
     update <- c(h, i, j1)
   }
 
+  if(biassed){
+    to_check <- unique(c(h, js, mcmc$h[js]))
+  }else{
+    to_check <- c(h, js)
+  }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h, js)))
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
 }
 
 # upstream = T here reverses move_create(... upstream = T) and vice versa
 
-move_delete <- function(mcmc, data, upstream = T){
+move_delete <- function(mcmc, data, upstream = T, biassed = F){
+
+  if(!upstream & biassed){
+    stop("A biassed delete move is only allowed when upstream = TRUE")
+  }
 
   # If no unobserved nodes, nothing to do here
   if(mcmc$n == data$n_obs){
@@ -728,12 +882,23 @@ move_delete <- function(mcmc, data, upstream = T){
 
   # Who to delete
   choices <- (data$n_obs + 1):(mcmc$n)
+  if(biassed){
+    ds <- sapply((data$n_obs + 1):mcmc$n, function(x){length(which(mcmc$h == x))})
+    choices <- choices[which(ds == 2)]
+
+    if(length(choices) == 0){
+      return(mcmc)
+    }
+  }
+
   # Term 1
   hastings <- hastings - log(1 / length(choices)) # P(old to new): pick host to delete
 
   i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
   h <- mcmc$h[i]
   js <- which(mcmc$h == i)
+
+
 
   if(!upstream){
     ts <- sapply(mcmc$seq[js], function(v){v[1]})
@@ -781,14 +946,6 @@ move_delete <- function(mcmc, data, upstream = T){
   }
 
 
-  # Resample seq for js (or j1 and ks)
-  # Terms 2
-  for (j in js) {
-    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = TRUE)
-    hastings <- hastings - prop[[3]]
-    prop <- prop[[1]]
-  }
-
   ## Re-indexing: everyone above i steps down 1, i gets deleted
   prop$h[which(prop$h > i)] <- prop$h[which(prop$h > i)] - 1
   prop$n <- prop$n - 1
@@ -820,35 +977,144 @@ move_delete <- function(mcmc, data, upstream = T){
     }
   }
 
+  # If biassed, we need to step up each of the js
+  if(biassed){
+    for (j in js) {
+      done <- FALSE
+      while (!done) {
+        # Number of kids
+        # Remember, we can't move one j onto another, or onto i!
+        kids <- setdiff(which(prop$h == prop$h[j]), js)
+
+        # HASTINGS CODE: Terms B2
+
+        # With probability 1 / (length(kids) + 1), the move ends here
+        if(runif(1) < 1 / (length(kids) + 1)){
+          hastings <- hastings - log(1 / (length(kids) + 1))
+          done <- TRUE
+        }else{
+          # Otherwise, pick a kid to move onto
+          kids <- setdiff(which(prop$h == prop$h[j]), js)
+          hastings <- hastings - log(1 / (length(kids) + 1))
+          if(length(kids) == 1){
+            kid <- kids
+          }else{
+            kid <- sample(kids, 1)
+          }
+          if(prop$h[kid] != prop$h[j]){
+            stop("Kid error")
+          }
+
+          prop <- shift(prop, data, j, prop$h[j], kid, upstream = T)
+        }
+      }
+
+      # If time too early, reject
+      if(prop$seq[[j]][length(prop$seq[[j]])] <= prop$seq[[prop$h[j]]][1]){
+        return(mcmc)
+      }
+    }
+  }
+
+
+
+  # Degree of h can't be too small
+  if(h > data$n_obs){
+    if(length(which(prop$h == h)) < 2){
+      return(mcmc)
+    }
+  }
+
+
+  # Resample seq for js (or j1 and ks)
+  # Terms 2
+  for (j in js) {
+    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = TRUE)
+    hastings <- hastings - prop[[3]]
+    prop <- prop[[1]]
+  }
+
+
+
+
+  ## Now, to finish calculating the probability of the proposal back to the original state...
+
   if(upstream){
-    ## For hastings ratio: probability of picking h and js
-    prob_h <- p_pick_h(prop, data)
+    if(biassed){
+      # HASTINGS CODE: Reverses Term B1
 
-    if(sum(prob_h) == 0){
-      print(mcmc$h)
-      print(prop$h)
-      print(prop$external_roots)
-      print("Whaaaa?")
-    }
+      # All positions that change across the whole dataset and how many times, minus 1
+      n_changes <- table(unlist(prop$subs$pos)) - 1
 
-    prob_h <- prob_h / sum(prob_h)
+      # If all 0, move is random choice of 2 js
+      if(all(n_changes == 0)){
+        # P(new to old): sample js
+        hastings <- hastings - lchoose(prop$n - 1, 2)
+      }else{
 
-    # log P(new -> old): P(choose h)
-    # Reverses Term 1a
-    hastings <- hastings + log(prob_h[h])
+        # Either we picked the js randomly or strategically
+        # First let's get the probability of the strategic case
 
-    # Pick who moves
-    # Number of people to move is uniform over valid choices
-    min_n_move <- 2
-    if(h > data$n_obs){
-      max_n_move <- sum(prop$h[2:prop$n] == h) - 1
+        # Find the positions with nonzero homoplasies
+        n_changes <- n_changes[n_changes > 0]
+
+        # Position numbers
+        pos_nos <- as.numeric(names(n_changes))
+
+        # For each position number, get a list of the js that have a mutation at that position
+        js_by_pos <- list()
+        for (p in 1:length(pos_nos)) {
+          js_by_pos[[p]] <- which(sapply(prop$subs$pos, function(v){pos_nos[p] %in% v}))
+        }
+
+        # Probability of picking js
+        p_pick_js <- 0
+        for (p in 1:length(js_by_pos)) {
+          if(all(js %in% js_by_pos[[p]])){
+            p_pick_js <- p_pick_js +
+              (1 / length(js_by_pos)) * # Probability of picking index p
+              (1 / choose(length(js_by_pos[[p]]), 2)) # Probability of picking the specific js
+          }
+        }
+
+        # P(new to old): with 95% probability, move according to how to delete homoplasies; otherwise random
+        hastings <- hastings + log(0.95 * p_pick_js + 0.05 / lchoose(prop$n - 1, 2))
+      }
+
     }else{
-      max_n_move <- sum(prop$h[2:prop$n] == h)
-    }
+      ## Unbiassed upstream move
 
-    # Reverse Terms 2, 3
-    hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
-    hastings <- hastings - lchoose(sum(prop$h[2:prop$n] == h), length(js)) # P(new to old): pick who moves
+      ## For hastings ratio: probability of picking h and js
+      prob_h <- p_pick_h(prop, data)
+
+      if(sum(prob_h) == 0){
+        print(mcmc$h)
+        print(prop$h)
+        print(prop$external_roots)
+        print("Whaaaa?")
+      }
+
+      prob_h <- prob_h / sum(prob_h)
+
+      # log P(new -> old): P(choose h)
+      # Reverses Term 1a
+      hastings <- hastings + log(prob_h[h])
+
+      # Pick who moves
+      # Number of people to move is uniform over valid choices
+      min_n_move <- 2
+      if(h > data$n_obs){
+        max_n_move <- sum(prop$h[2:prop$n] == h) - 1
+      }else{
+        max_n_move <- sum(prop$h[2:prop$n] == h)
+      }
+
+
+
+      # Reverse Terms 2, 3
+      hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
+      hastings <- hastings - lchoose(sum(prop$h[2:prop$n] == h), length(js)) # P(new to old): pick who moves
+    }
   }else{
 
 
@@ -873,10 +1139,20 @@ move_delete <- function(mcmc, data, upstream = T){
   }
 
   if(upstream){
-    update <- h
+    if(biassed){
+      update <- unique(c(h, prop$h[js]))
+    }else{
+      update <- h
+    }
   }else{
     update <- c(h, j1)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h, js)))
+  if(biassed){
+    to_check <- unique(c(h, js, prop$h[js]))
+  }else{
+    to_check <- c(h, js)
+  }
+
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
 }

@@ -108,6 +108,15 @@ local_mcmc <- function(mcmc, data){
       mcmc <- move_delete(mcmc, data, upstream = F)
     }
 
+    if(runif(1) < 1/2){
+      # Move 28
+      mcmc <- move_create(mcmc, data, upstream = T, biassed = T)
+
+    }else{
+      # Move 29
+      mcmc <- move_delete(mcmc, data, upstream = T, biassed = T)
+    }
+
     # Append new results
     if(r %% data$sample_every == 0){
       res <- c(res, list(mcmc))

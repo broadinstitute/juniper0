@@ -165,6 +165,26 @@ ancestry <- function(h, i){
   }
 }
 
+# Get the MRCA node of a bunch of nodes
+mrca <- function(h, js){
+  # Ancestry of each j
+  ancs <- lapply(js, ancestry, h=h)
+
+  # Index of the ancestor we will try
+  ind <- 1
+
+  # Does this work as the MRCA?
+  works <- TRUE
+  while (works) {
+    if(all(sapply(ancs, function(v){ancs[[1]][ind + 1] %in% v}))){
+      ind <- ind + 1
+    }else{
+      works <- FALSE
+    }
+  }
+  return(ancs[[1]][ind])
+}
+
 # Get the generations of an ancestor vector
 generations <- function(h, i){
   if(length(which(h %in% i)) == 0){
