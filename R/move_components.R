@@ -113,15 +113,95 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
   # Number of mutations
   n_mut <- length(mcmc$subs$pos[[i]])
 
+  # Does h have iSNV information available?
+  isnv_info <- FALSE
+  if(h < data$n_obs){
+    if(data$vcf_present[h]){
+      isnv_info <- TRUE
+    }
+  }
+
+  if(isnv_info){
+    ## If iSNV information available in h, do importance sampling
+
+    # Which SNVs going from h to i are also detected as iSNVs in h?
+    detected <- integer(0)
+
+    # What are their frequencies?
+    freqs <- numeric(0)
+
+    if(n_mut > 0){
+      for (j in 1:n_mut) {
+        if(mcmc$subs$pos[[i]][j] %in% data$snvs[[h]]$isnv$pos){
+          # Index of SNV j in i in the iSNVs of h
+          ind <- match(mcmc$subs$pos[[i]][j], data$snvs[[h]]$isnv$pos)
+          # Alleles in h
+          alleles <- c(data$snvs[[h]]$isnv$a1[ind], data$snvs[[h]]$isnv$a2[ind])
+
+          # If the alleles match...
+          if(mcmc$subs$from[[i]][j] %in% alleles & mcmc$subs$to[[i]][j] %in% alleles){
+            # Append j to list of detected SNVs in iSNV data
+            detected <- c(detected, j)
+
+            # Get the frequency of this iSNV
+            if(mcmc$bot[[h]][ind]){
+              # If a1 is detected in the bottleneck, frequency is 1 - af1
+              freqs <- c(freqs, 1 - data$snvs[[h]]$isnv$af1[ind])
+            }else{
+              # Otherwise it's af1
+              freqs <- c(freqs, data$snvs[[h]]$isnv$af1[ind])
+            }
+          }
+        }
+      }
+    }
+
+    # How long after h is infected do these iSNVs emerge, on average?
+    # Population size is 1/freqs
+    # At time t past inoculation, the population size is exp(N_e * t)
+    # Hence t = log(1 / freq) / N_e
+    t_emerge <- log(1 / freq) / mcmc$N_eff
+
+    # What is the time to emergence as a fraction of the total time interval?
+    frac_emerge <- t_emerge / (max_t - min_t)
+
+    # If it's greater than half, just set this to 1/2 for a uniform draw
+    frac_emerge <- pmin(frac_emerge, 1/2)
+
+    # Undetected SNVs in iSNV data
+    undetected <- setdiff(1:n_mut, detected)
+  }
+
   ### TRYING SIMPLER VERISION: uniform draws
   if(n_mut != length(mcmc$tmu[[i]]) | max_t <= min_t){
     log_p_new_old <- -Inf
   }else{
-    log_p_new_old <- n_mut * log(1 / (max_t - min_t))
+
+    if(isnv_info){
+      # Contributions to current state by detected and undetected SNVs in h's iSNV data
+      log_p_new_old <-
+        length(undetected) * log(1 / (max_t - min_t)) +
+        sum(dbeta1_rescaled(mcmc$tmu[[i]][detected], frac_emerge, min_t, max_t, log = TRUE))
+
+    }else{
+      log_p_new_old <- n_mut * log(1 / (max_t - min_t))
+    }
   }
 
-  mcmc$tmu[[i]] <- runif(n_mut, min_t, max_t)
-  log_p_old_new <- n_mut * log(1 / (max_t - min_t))
+  ## Now, for the resampling of tmu
+
+  if(isnv_info){
+    mcmc$tmu[[i]] <- runif(n_mut, min_t, max_t)
+    mcmc$tmu[[i]][detected] <- rbeta1_rescaled(length(detected), frac_emerge, min_t, max_t)
+
+    log_p_old_new <-
+      length(undetected) * log(1 / (max_t - min_t)) +
+      sum(dbeta1_rescaled(mcmc$tmu[[i]][detected], frac_emerge, min_t, max_t, log = TRUE))
+
+  }else{
+    mcmc$tmu[[i]] <- runif(n_mut, min_t, max_t)
+    log_p_old_new <- n_mut * log(1 / (max_t - min_t))
+  }
 
   if(output == "log_p_new_old"){
     return(log_p_new_old)

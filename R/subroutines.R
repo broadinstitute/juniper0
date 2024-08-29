@@ -282,6 +282,21 @@ pprop_bounded <- function(x, N, mu, log){
   }
 }
 
+# Draw Beta(1, (1-mu)/mu) (mean mu), then rescaled to [t_min, t_max]
+rbeta1_rescaled <- function(n, mu, t_min, t_max){
+  rbeta(n, 1, (1-mu)/mu) * (t_max - t_min) + t_min
+}
+
+# Density for the above
+dbeta1_rescaled <- function(x, mu, t_min, t_max, log){
+  out <- dbeta((x - t_min) / (t_max - t_min), 1, (1-mu)/mu, log = log)
+  if(log){
+    return(out - log(t_max - t_min))
+  }else{
+    return(out / (t_max - t_min))
+  }
+}
+
 ## Maximum time of infection for a host i
 # If fix_child_seq = F, we allow max_t to go all the way up to the min of mcmc$seq[[j]][1] for j child of i
 get_max_t <- function(mcmc, data, i, fix_child_seq = TRUE){

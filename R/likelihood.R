@@ -188,7 +188,6 @@ g_lik <- function(mcmc, data, i){
     pprop_bounded(data$filters$af, trans_isnv_size[global_alone], mcmc$mu, log = F) + # When there's an earlier emergence of this iSNV
       pbeta(data$filters$af, 1, trans_isnv_size[global_alone]) * pgeom(trans_isnv_size[global_alone] - 1, mcmc$mu, lower.tail = F) # When there's not
   ))
-  #print(out)
 
   # And finally, all other sites
   # Use inclusion/exclusion to get the number of other sites
