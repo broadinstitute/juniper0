@@ -21,6 +21,7 @@
 #' @param psi Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
 #' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.
+#' @param N_eff The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).
 #' @return The initial configuration of the Markov Chain.
 #' @export
 initialize <- function(
@@ -44,7 +45,8 @@ initialize <- function(
     R = 2, # Reproductive number (average over entire outbreak)
     psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
     init_mu = 2e-5,
-    fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
+    fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
+    N_eff = log(100) # Effective population size, within host
 ){
 
   # n_subtrees = 1
@@ -303,7 +305,7 @@ initialize <- function(
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
   mcmc$R <- R
   mcmc$pi <- 0.2 # Probability of sampling
-  mcmc$N_eff <- log(100)
+  mcmc$N_eff <- N_eff
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
   mcmc$seq <- list()

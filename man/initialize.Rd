@@ -13,7 +13,7 @@ initialize(
   init_ancestry = FALSE,
   rooted = TRUE,
   N = NA,
-  record = c("n", "h", "seq", "b", "mu", "p", "pi", "R"),
+  record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"),
   filters = NULL,
   check_names = TRUE,
   indir = "input_data",
@@ -24,8 +24,8 @@ initialize(
   R = 2,
   psi = 0.5,
   init_mu = 2e-05,
-  init_p = 2e-06,
-  fixed_mu = F
+  fixed_mu = F,
+  N_eff = log(100)
 )
 }
 \arguments{
@@ -66,6 +66,8 @@ initialize(
 \item{init_mu}{Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.}
 
 \item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.}
+
+\item{N_eff}{The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).}
 }
 \value{
 The initial configuration of the Markov Chain.
