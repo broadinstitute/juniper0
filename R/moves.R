@@ -25,27 +25,32 @@
 #moves <- list()
 
 ## Update time of infection for a host on an edge leading to i
-move_seq <- function(mcmc, data){
+move_seq <- function(mcmc, data, also_resample_tmu){
   # Choose random host with ancestor
   i <- sample(2:mcmc$n, 1)
+  update <- mcmc$h[i]
 
-  if(i %in% mcmc$external_roots){
-    fix_latest_host <- TRUE # If i is the root of a downstream cluster, can't resample time of infection of i
-    update <- i
-  }else{
-    fix_latest_host <- FALSE
-    update <- c(i, which(mcmc$h == i))
-  }
-
-  prop <- resample_seq(mcmc, data, i, fix_latest_host)
+  prop <- resample_seq(mcmc, data, i, fix_latest_host = TRUE, also_resample_tmu = also_resample_tmu)
 
   hastings <- prop[[2]] - prop[[3]]
   prop <- prop[[1]]
 
-
-
   return(accept_or_reject(prop, mcmc, data, update, hastings))
 
+}
+
+move_tmu <- function(mcmc, data){
+  # Choose random host with ancestor
+  i <- sample(2:mcmc$n, 1)
+
+  prop <- resample_tmu(mcmc, data, i)
+
+  hastings <- prop[[2]] - prop[[3]]
+  prop <- prop[[1]]
+
+  update <- mcmc$h[i]
+
+  return(accept_or_reject(prop, mcmc, data, update, hastings))
 }
 
 
@@ -61,6 +66,7 @@ move_w_t <- function(mcmc, data, recursive = F){
   }
 
   i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
+
 
   # In recursive mode:
   if(recursive){
@@ -109,7 +115,7 @@ move_w_t <- function(mcmc, data, recursive = F){
 
   # P(new to old): pick seq for each j and oldest ancestor in is
   for (j in c(js, is[1])) {
-    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old")
+    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old", also_resample_tmu = TRUE)
   }
 
   # Change in time of infection for is
@@ -118,30 +124,25 @@ move_w_t <- function(mcmc, data, recursive = F){
   # Make proposal
   prop <- mcmc
 
-  # Update seq for is (just adding a fixed value here)
+  # Update seq and tmu for is (just adding a fixed value here)
   for (i in is) {
     prop$seq[[i]] <- prop$seq[[i]] + delta
+    prop$tmu[[i]] <- prop$tmu[[i]] + delta
   }
 
   # Update seq for js and is[1] randomly
   for (j in c(js, is[1])) {
-    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE)
+    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = TRUE)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
   }
 
-  update <- c(is, js)
+  update <- is
+  if(!recursive){
+    update <- c(update, h)
+  }
 
   return(accept_or_reject(prop, mcmc, data, update, hastings))
-}
-
-## Update b using a N(0,0.01) proposal density
-move_b <- function(mcmc, data){
-  # Proposal
-  prop <- mcmc
-  prop$b <- rnorm(1, mcmc$b, 0.1)
-  update <- 2:mcmc$n
-  return(accept_or_reject(prop, mcmc, data, update))
 }
 
 ## Update b using a N(0,0.01) proposal density
@@ -157,55 +158,21 @@ move_pi <- function(mcmc, data){
   }
 }
 
-## Update a_g using a N(0,1) proposal density
-move_a_g <- function(mcmc, data){
-  # Proposal
-  prop <- mcmc
-  prop$a_g <- rnorm(1, mcmc$a_g, 0.5)
-
-  # Also update reproductive number and hence psi to maintain constant growth rate
-  prop$psi <- prop$rho / (exp((prop$a_g / prop$lambda_g) * data$growth) + prop$rho) # second parameter, NBin offspring distribution (computed in terms of R0)
-
-  prop$e_lik <- e_lik(prop, data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + prop$prior - mcmc$e_lik - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
-}
-
-## Update a_s using a N(0,1) proposal density
-move_a_s <- function(mcmc, data){
-  # Proposal
-  prop <- mcmc
-  prop$a_s <- rnorm(1, mcmc$a_s, 1)
-  prop$e_lik <- e_lik(prop, data)
-  prop$prior <- prior(prop)
-
-  if(log(runif(1)) < prop$e_lik + prop$prior - mcmc$e_lik - mcmc$prior){
-    return(prop)
-  }else{
-    return(mcmc)
-  }
-}
-
 ## Update mu
 move_mu <- function(mcmc, data){
-  # Proposal
   prop <- mcmc
-  prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 5)
+  prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 10)
 
   update <- 2:mcmc$n
   return(accept_or_reject(prop, mcmc, data, update))
 }
 
 ## Update p
-move_p <- function(mcmc, data){
+move_N_eff <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$p <- rnorm(1, mcmc$p, data$init_p / 5)
+  prop$N_eff <- rnorm(1, mcmc$N_eff, 0.5)
+
   update <- 2:mcmc$n
   return(accept_or_reject(prop, mcmc, data, update))
 }
@@ -259,7 +226,8 @@ move_genotype <- function(mcmc, data){
   hastings <- prop[[2]] - prop[[3]]
   prop <- prop[[1]]
 
-  update <- c(i, js) # For which hosts must we update the genomic likelihood?
+  # Resample times of mutations
+  update <- c(i, mcmc$h[i]) # For which hosts must we update the genomic likelihood?
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(mcmc$h[i], js)))
 }
@@ -279,7 +247,6 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
   }else{
     fix_latest_host <- FALSE
   }
-  update <- c(i, js)
 
   # Previous ancestor of i
   h_old <- mcmc$h[i]
@@ -292,8 +259,9 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
   # Probability of proposing current genome and current seq
   hastings <- hastings +
-    genotype(mcmc, data, i, output = "log_p_new_old") +
-    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old")
+    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE) +
+    genotype(mcmc, data, i, output = "log_p_new_old")
+
 
   if(upstream){
     # Who are the other children of h_old?
@@ -323,15 +291,15 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
     # Update ancestor and initialize genetics
     prop$h[i] <- h_new
-    prop <- update_genetics_upstream(prop, i, h_new)
+    prop <- update_genetics(prop, i, h_new, upstream = T)
 
-    # Resample genotype
-    prop <- genotype(prop, data, i)
+    # Resample seq
+    prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = F)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
 
-    # Resample seq
-    prop <- resample_seq(prop, data, i, fix_latest_host)
+    # Resample genotype
+    prop <- genotype(prop, data, i)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
 
@@ -354,15 +322,15 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
     # Update ancestor and initialize genetics
     prop$h[i] <- h_new
-    prop <- update_genetics_downstream(prop, i, h_old)
+    prop <- update_genetics(prop, i, h_old, upstream =F)
 
-    # Resample genotype
-    prop <- genotype(prop, data, i)
+    # Resample seq
+    prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = F)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
 
-    # Resample seq
-    prop <- resample_seq(prop, data, i, fix_latest_host)
+    # Resample genotype (which also resamples tmu)
+    prop <- genotype(prop, data, i)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
 
@@ -373,6 +341,8 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
     # P(new -> old): choose correct child of h_new
     hastings <- hastings + log(1 / length(children))
   }
+
+  update <- c(h_old, h_new, i)
 
   return(accept_or_reject(prop, mcmc, data, update, hastings = hastings, check_parsimony = c(h_old, h_new, js)))
 }
@@ -398,13 +368,12 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   }
 
-  update <- c(i, js)
   hastings <- 0
 
   # Probability of proposing current genome and current seq
   hastings <- hastings +
     genotype(mcmc, data, i, output = "log_p_new_old") +
-    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old")
+    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE)
 
   # Max time at which i can be infected
   max_t <- get_max_t(mcmc, data, i)
@@ -434,6 +403,8 @@ move_h_global <- function(mcmc, data, biassed = T){
   }
 
 
+
+
   h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = scores))
 
   # Find the path from h_old to h_new
@@ -446,22 +417,22 @@ move_h_global <- function(mcmc, data, biassed = T){
   # If length of down < 2, don't need to do anything
   if(length(down) >= 2){
     for (j in 2:length(down)) {
-      prop <- shift_downstream(prop, data, i, down[j-1], down[j])
+      prop <- shift(prop, data, i, down[j-1], down[j], upstream = F)
     }
   }
   if(length(up) >= 2){
     for (j in 2:length(up)) {
-      prop <- shift_upstream(prop, data, i, up[j-1], up[j])
+      prop <- shift(prop, data, i, up[j-1], up[j], upstream = T)
     }
   }
 
-  # Resample genotype
-  prop <- genotype(prop, data, i)
+  # Resample seq
+  prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = FALSE)
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
-  # Resample seq
-  prop <- resample_seq(prop, data, i, fix_latest_host)
+  # Resample genotype
+  prop <- genotype(prop, data, i)
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
@@ -478,6 +449,8 @@ move_h_global <- function(mcmc, data, biassed = T){
   }
 
   hastings <- hastings + log(rev_scores[which(choices == h_old)]) - log(scores[which(choices == h_new)])
+
+  update <- c(h_old, h_new, i)
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, js)))
 
@@ -521,31 +494,47 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
   children_i <- setdiff(which(mcmc$h == i), j)
   children_j <- which(mcmc$h == j)
 
+  hastings <- 0
+  # Resample tmu
+  for (k in c(i, j, children_i, children_j)) {
+    hastings <- hastings + resample_tmu(mcmc, data, k, output = "log_p_new_old")
+    if(is.infinite(hastings) | is.nan(hastings)){
+      stop("wut")
+    }
+  }
+
   # Update the state
   prop <- mcmc
-  prop <- shift_downstream(prop, data, j, i, h) # Shift j from i onto h
-  prop <- shift_upstream(prop, data, i, h, j) # Shift i from h onto j
+  prop <- shift(prop, data, j, i, h, upstream = F) # Shift j from i onto h
+  prop <- shift(prop, data, i, h, j, upstream = T) # Shift i from h onto j
   prop$seq[[j]] <- mcmc$seq[[i]] # Swapping seq
   prop$seq[[i]] <- mcmc$seq[[j]]
 
 
   if(exchange_children){
     for (k in children_i) {
-      prop <- shift_downstream(prop, data, k, i, j)
+      prop <- shift(prop, data, k, i, j, upstream = F)
     }
     for (k in children_j) {
-      prop <- shift_upstream(prop, data, k, j, i)
+      prop <- shift(prop, data, k, j, i, upstream = T)
     }
   }
 
 
-  update <- c(i, j, children_i, children_j) # For which hosts must we update the genomic likelihood?
-  hastings <- 0
+  check_timing <- c(i, j, children_i, children_j) # For which hosts must we update the genomic likelihood?
 
-  prop_ts <- sapply(prop$seq, function(v){v[1]})
+  prop_ts <- sapply(prop$seq[check_timing], function(v){v[length(v)]})
+  prop_ts_anc <- sapply(prop$seq[prop$h[check_timing]], function(v){v[1]})
 
-  if(any(prop_ts[update] <= prop_ts[prop$h[update]])){
+  if(any(prop_ts <= prop_ts_anc)){
     return(mcmc)
+  }
+
+  # Resample tmu
+  for (k in c(i, j, children_i, children_j)) {
+    prop <- resample_tmu(prop, data, k)
+    hastings <- hastings - prop[[3]]
+    prop <- prop[[1]]
   }
 
 
@@ -555,8 +544,9 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
     to_check <- c(to_check, children_i, children_j)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
+  update <- c(h, i, j)
 
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
 
 }
 
@@ -653,30 +643,50 @@ move_create <- function(mcmc, data, upstream = T){
   prop$n <- mcmc$n + 1
   prop$h[i] <- h
 
-  ## Initialize genotype for i. This is all changing, so we initialize as i loses all iSNVs to 0. Everything else stays the same
-  prop$mx0[[i]] <- unique(c(
-    mcmc$mx0[[js[1]]], mcmc$mxy[[js[1]]], mcmc$mx1[[js[1]]]
-  ))
-  prop$m01[[i]] <- character(0)
-  prop$m10[[i]] <- character(0)
-  prop$m0y[[i]] <- character(0)
-  prop$m1y[[i]] <- character(0)
-  prop$mx1[[i]] <- character(0)
-  prop$mxy[[i]] <- character(0)
+  ## Initialize genotype for i. Initialized to same as h
+  prop$subs$from[[i]] <- character(0)
+  prop$subs$pos[[i]] <- integer(0)
+  prop$subs$to[[i]] <- character(0)
 
-  # Also initialize mcmc$isnv
-  prop$isnv$call[[i]] <- character(0)
-  prop$isnv$af[[i]] <- numeric(0)
+  prop$tmu[[i]] <- numeric(0)
 
   if(upstream){
     ## Move all js onto i
     for (j in js) {
-      prop <- shift_upstream(prop, data, j, h, i)
+      prop <- shift(prop, data, j, h, i, upstream = T)
     }
   }else{
-    prop <- shift_upstream(prop, data, j1, h, i)
+    prop <- shift(prop, data, j1, h, i, upstream = T)
     for (k in ks) {
-      prop <- shift_downstream(prop, data, k, j1, i)
+      prop <- shift(prop, data, k, j1, i, upstream = F)
+    }
+  }
+
+  # For the first element of prop$seq[[i]], choose uniformly random time up through prop$seq[[j]][1]
+  max_t <- get_max_t(prop, data, i, fix_child_seq = FALSE)
+  min_t <- prop$seq[[h]][1]
+
+  #print(max_t - min_t)
+
+  prop$seq[[i]] <- runif(1, min_t, max_t)
+  # Term 5
+  hastings <- hastings - log(1 / (max_t - min_t))
+
+  # Then, resample seq again, fixing its first element
+  prop <- resample_seq(prop, data, i, fix_latest_host = TRUE, also_resample_tmu = FALSE)
+  # Term 6
+  hastings <- hastings - prop[[3]]
+  prop <- prop[[1]]
+
+  # Finally, resample seq for j. Also fix latest host, so we don't have to update g_lik for children of j
+  for (j in js) {
+    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = FALSE)
+    # Terms 7
+    hastings <- hastings - prop[[3]]
+    prop <- prop[[1]]
+
+    if(prop$seq[[j]][length(prop$seq[[j]])] <= prop$seq[[i]][1]){
+      stop("Bad resampling of seq")
     }
   }
 
@@ -686,38 +696,22 @@ move_create <- function(mcmc, data, upstream = T){
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
-  # For the first element of prop$seq[[i]], choose uniformly random time up through prop$seq[[j]][1]
-  max_t <- get_max_t(prop, data, i, fix_child_seq = FALSE)
-  min_t <- prop$seq[[h]][1]
-
-  prop$seq[[i]] <- runif(1, min_t, max_t)
-  # Term 5
-  hastings <- hastings - log(1 / (max_t - min_t))
-
-  # Then, resample seq again, fixing its first element
-  prop <- resample_seq(prop, data, i, fix_latest_host = TRUE)
-  # Term 6
-  hastings <- hastings - prop[[3]]
-  prop <- prop[[1]]
-
-  # Finally, resample seq for j. Also fix latest host, so we don't have to update g_lik for children of j
-  for (j in js) {
-    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE)
-    # Terms 7
-    hastings <- hastings - prop[[3]]
-    prop <- prop[[1]]
-  }
-
   ## For the move in the reverse direction: we need to pick i as the node to remove, and sample seq for js
   # Reverses Term 1 below
   hastings <- hastings + log(1 / (prop$n - data$n_obs)) # P(new to old): pick i as the host to remove
 
   # Reverses Terms 2 below
   for (j in js) {
-    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old")
+    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old", also_resample_tmu = TRUE)
   }
 
-  update <- c(i, js)
+  if(upstream){
+    update <- c(h, i)
+  }else{
+    update <- c(h, i, j1)
+  }
+
+
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h, js)))
 }
 
@@ -743,8 +737,14 @@ move_delete <- function(mcmc, data, upstream = T){
 
   if(!upstream){
     ts <- sapply(mcmc$seq[js], function(v){v[1]})
+
+    # If multiple times are the minimum, move is impossible, so reject
+    if(sum(ts == min(ts)) > 1){
+      return(mcmc)
+    }
     j1 <- js[which.min(ts)]
     ks <- setdiff(js, j1)
+
   }
 
   ## Some initial updates to hastings ratio: time of mcmc$seq[[i]][1], rest of mcmc$seq[[i]], mcmc$seq[[j]], and genotype at i
@@ -754,11 +754,11 @@ move_delete <- function(mcmc, data, upstream = T){
   hastings <- hastings + log(1 / (max_t - min_t))
 
   # Reverses Term 6 above
-  hastings <- hastings + resample_seq(mcmc, data, i, fix_latest_host = TRUE, output = "log_p_new_old")
+  hastings <- hastings + resample_seq(mcmc, data, i, fix_latest_host = TRUE, output = "log_p_new_old", also_resample_tmu = FALSE)
 
   # Reverse Terms 7 above
   for (j in js) {
-    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old")
+    hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old", also_resample_tmu = FALSE)
   }
 
   # Genotype at i
@@ -770,13 +770,13 @@ move_delete <- function(mcmc, data, upstream = T){
 
   if(upstream){
     for (j in js) {
-      prop <- shift_downstream(prop, data, j, i, h)
+      prop <- shift(prop, data, j, i, h, upstream = F)
     }
   }else{
     for (k in ks) {
-      prop <- shift_upstream(prop, data, k, i, j1)
+      prop <- shift(prop, data, k, i, j1, upstream = T)
     }
-    prop <- shift_downstream(prop, data, j1, i, h)
+    prop <- shift(prop, data, j1, i, h, upstream = F)
 
   }
 
@@ -784,7 +784,7 @@ move_delete <- function(mcmc, data, upstream = T){
   # Resample seq for js (or j1 and ks)
   # Terms 2
   for (j in js) {
-    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE)
+    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = TRUE)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
   }
@@ -795,16 +795,12 @@ move_delete <- function(mcmc, data, upstream = T){
   prop$h <- prop$h[-i]
   prop$seq <- prop$seq[-i]
 
-  prop$m01 <- prop$m01[-i]
-  prop$m10 <- prop$m10[-i]
-  prop$m0y <- prop$m0y[-i]
-  prop$m1y <- prop$m1y[-i]
-  prop$mx0 <- prop$mx0[-i]
-  prop$mx1 <- prop$mx1[-i]
-  prop$mxy <- prop$mxy[-i]
+  prop$subs$from <- prop$subs$from[-i]
+  prop$subs$pos <- prop$subs$pos[-i]
+  prop$subs$to <- prop$subs$to[-i]
+  prop$tmu <- prop$tmu[-i]
 
-  prop$isnv$call <- prop$isnv$call[-i]
-  prop$isnv$af <- prop$isnv$af[-i]
+  # "$bot" does not exist for unobserved hosts
 
   prop$g_lik <- prop$g_lik[-i]
   prop$external_roots[which(prop$external_roots > i)] <- prop$external_roots[which(prop$external_roots > i)] - 1
@@ -876,8 +872,11 @@ move_delete <- function(mcmc, data, upstream = T){
 
   }
 
-  update <- js
+  if(upstream){
+    update <- h
+  }else{
+    update <- c(h, j1)
+  }
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h, js)))
-
 }

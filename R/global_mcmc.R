@@ -24,13 +24,11 @@
 
 global_mcmc <- function(mcmc, data){
 
-  mcmc <- move_b(mcmc, data)
-
   if(!data$fixed_mu){
     mcmc <- move_mu(mcmc, data)
   }
 
-  mcmc <- move_p(mcmc, data)
+  #mcmc <- move_N_eff(mcmc, data)
   mcmc <- move_pi(mcmc, data)
   mcmc <- move_R(mcmc, data)
 
@@ -94,14 +92,9 @@ breakdown <- function(mcmc, data, old_roots){
     mcmcs[[i]]$h <- mcmcs[[i]]$h[joined]
     mcmcs[[i]]$h <- match(mcmcs[[i]]$h, joined)
     mcmcs[[i]]$seq <- mcmcs[[i]]$seq[joined]
-    mcmcs[[i]]$m01 <- mcmcs[[i]]$m01[joined]
-    mcmcs[[i]]$m10 <- mcmcs[[i]]$m10[joined]
-    mcmcs[[i]]$m0y <- mcmcs[[i]]$m0y[joined]
-    mcmcs[[i]]$m1y <- mcmcs[[i]]$m1y[joined]
-    mcmcs[[i]]$mx0 <- mcmcs[[i]]$mx0[joined]
-    mcmcs[[i]]$mx1 <- mcmcs[[i]]$mx1[joined]
-    mcmcs[[i]]$mxy <- mcmcs[[i]]$mxy[joined]
-    mcmcs[[i]]$d <- mcmcs[[i]]$d[joined]
+    mcmcs[[i]]$subs <- mcmcs[[i]]$subs[joined]
+    mcmcs[[i]]$tmu <- mcmcs[[i]]$tmu[joined]
+
     mcmcs[[i]]$g_lik <- mcmcs[[i]]$g_lik[joined]
 
     # The roots of external clusters have been relabeled

@@ -32,7 +32,7 @@ initialize <- function(
     init_ancestry = FALSE, # Specify the starting ancestry
     rooted = TRUE, # Is the root of the transmission network fixed at the ref sequence?
     N = NA, # Population size
-    record = c("n", "h", "seq", "b", "mu", "p", "pi", "R"), # Which aspects of mcmc do we want to record
+    record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"), # Which aspects of mcmc do we want to record
     filters = NULL,
     check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
@@ -44,9 +44,30 @@ initialize <- function(
     R = 2, # Reproductive number (average over entire outbreak)
     psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
     init_mu = 2e-5,
-    init_p = 2e-6,
     fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
 ){
+
+  n_subtrees = 1
+  n_global = 100 # Number of global moves
+  n_local = 100 # Number of local moves per global move
+  sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
+  init_mst = FALSE # Should we initialize to a minimum spanning tree?
+  init_ancestry = FALSE # Specify the starting ancestry
+  rooted = TRUE # Is the root of the transmission network fixed at the ref sequence?
+  N = NA # Population size
+  record = c("n", "h", "seq", "N_eff", "mu", "pi", "R") # Which aspects of mcmc do we want to record
+  filters = NULL
+  check_names = FALSE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
+  # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
+  indir = "input_data" # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
+  a_g = 5 # Shape parameter, generation interval
+  lambda_g = 1 # Rate parameter, generation interval
+  a_s = 5 # Shape parameter, sojourn interval
+  lambda_s = 1 # Rate parameter, sojourn interval
+  R = 2 # Reproductive number (average over entire outbreak)
+  psi = 0.5 # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
+  init_mu = 2e-5
+  fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
 
   ## Filters
   if(is.null(filters)){
@@ -186,58 +207,7 @@ initialize <- function(
   }
   close(pb)
 
-  # Remove irrelevant missing site info; add SNVs with missing data
-  message("Identifying missing data in samples...")
-  pb = txtProgressBar(min = 0, max = n, initial = 0)
-  snv_dist <- ape::dist.dna(fasta, "N")
-  snv_dist_mtx <- as.matrix(snv_dist)
-  for (i in 1:n) {
-    # Which positions in all_pos are detected in the missing sites in the sample?
-    present <- which(all_pos %in% snvs[[i]]$missing$pos)
-    # Change missing$pos to be a vector of these sites (may have duplicates)
-    snvs[[i]]$missing$pos <- all_pos[present]
-    # Add a new vector of the SNVs for which there's no information
-    snvs[[i]]$missing$call <- all_snv[present]
-
-
-
-    setTxtProgressBar(pb,i)
-  }
-  close(pb)
-
-  for (i in 1:n) {
-
-    if(length(snvs[[i]]$missing$pos) > 0){
-      ##  For each missing SNV, identify nearest neighbor by SNV distance for which that SNV is *not* missing
-
-      # Nearest neightbors, in order of SNV distance
-      nearest <- sort.int(
-        snv_dist_mtx[i, ],
-        decreasing = F,
-        index.return = T
-      )$ix[-1] # Delete self
-
-      for (j in 1:length(snvs[[i]]$missing$pos)) {
-        # Which SNV are we talking about?
-        snv <- snvs[[i]]$missing$call[j]
-        # Who is the nearest neighbor for whom the SNV is not missing?
-        k <- 1
-        done <- F
-        while (done == F & k <= length(nearest)) {
-          if(snv %in% snvs[[nearest[k]]]$missing$call){
-            k <- k + 1
-          }else{
-            if(snv %in% snvs[[nearest[k]]]$snv$call){
-              # If nearest neighbor has the SNV, add the call to i...
-              snvs[[i]]$snv$call <- c(snvs[[i]]$snv$call, snv)
-            } # ...else do nothing
-          }
-          done <- T
-        }
-        # And, if it's missing in everyone, (done == F still), do nothing
-      }
-    }
-  }
+  # Come back to missing data
 
   ### Initialize MCMC and data
 
@@ -259,7 +229,6 @@ initialize <- function(
   data$vcf_present <- vcf_present
   data$rooted <- rooted
   data$init_mu <- init_mu
-  data$init_p <- init_p
   data$fixed_mu <- fixed_mu
   data$names <- names
 
@@ -269,72 +238,88 @@ initialize <- function(
   mcmc$n <- n # number of tracked hosts
   mcmc$h <- rep(1, n)
   mcmc$h[1] <- NA
-  mcmc$m01 <- list() # fixed mutations added in each transmission link
-  mcmc$m10 <- list() # fixed mutations deleted in each transmission link
-  mcmc$m0y <- list() # 0% -> y%, 0 < y < 100
-  mcmc$m1y <- list() # 100% -> y%, 0 < y < 100
-  mcmc$mx0 <- list() # x% -> 0%, 0 < x < 100
-  mcmc$mx1 <- list() # x% -> 100%, 0 < x < 100
-  mcmc$mxy <- list() # x% -> y%, 0 < x < 100, 0 < y < 100
+
+  # SNVs: from, pos, to
+  mcmc$subs <- list()
+  mcmc$subs$from <- list()
+  mcmc$subs$pos <- list()
+  mcmc$subs$to <- list()
+
+  # For each iSNV, TRUE if allele a1 in the bottleneck, FALSE otherwise
+  mcmc$bot <- list()
+
   for (i in 1:n) {
-    mcmc$m01[[i]] <- setdiff(
-      snvs[[i]]$snv$call,
-      snvs[[1]]$isnv$call
-    )
-    mcmc$m10[[i]] <- character(0)
-    if(is.null(snvs[[i]]$isnv$call)){
-      mcmc$m0y[[i]] <- character(0)
-    }else{
-      mcmc$m0y[[i]] <- setdiff(
-        snvs[[i]]$isnv$call,
-        snvs[[1]]$isnv$call
-      )
+    # Positions at which the consensus genome changes
+    pos <- data$snvs[[i]]$snv$pos
+    cons_change <- logical(0)
+
+    if(length(pos) > 0){
+      # Positions in which the initial bottleneck genome should indeed report a consensus change
+      for (p in 1:length(pos)) {
+        cons_change[p] <- TRUE
+        if(pos[p] %in% data$snvs[[i]]$isnv$pos){
+          # Index of which isnv
+          ind <- which(data$snvs[[i]]$isnv$pos == pos[p])
+          ref_allele <- raw_to_base(ref_genome[[1]][pos[p]])
+          # If either allele in the iSNV matches the ref genome (root), no consensus change in i
+          if(data$snvs[[i]]$isnv$a1[ind] == ref_allele | data$snvs[[i]]$isnv$a2[ind] == ref_allele){
+            cons_change[p] <- FALSE
+          }
+        }
+      }
     }
-    mcmc$m1y[[i]] <- character(0)
-    if(is.null(snvs[[1]]$isnv$call)){
-      mcmc$mx0[[i]] <- character(0)
-    }else{
-      mcmc$mx0[[i]] <- setdiff(
-        snvs[[1]]$isnv$call,
-        union(
-          snvs[[i]]$snv$call,
-          snvs[[i]]$isnv$call
-        )
-      )
-    }
-    if(is.null(snvs[[1]]$isnv$call)){
-      mcmc$mx1[[i]] <- character(0)
-    }else{
-      mcmc$mx1[[i]] <- intersect(
-        snvs[[1]]$isnv$call,
-        snvs[[i]]$snv$call
-      )
-    }
-    if(i==1 | is.null(snvs[[1]]$isnv$call) | is.null(snvs[[i]]$isnv$call)){
-      mcmc$mxy[[i]] <- character(0)
-    }else{
-      mcmc$mxy[[i]] <- intersect(
-        snvs[[1]]$isnv$call,
-        snvs[[i]]$isnv$call
-      )
+
+    mcmc$subs$from[[i]] <- data$snvs[[i]]$snv$from[cons_change]
+    mcmc$subs$pos[[i]] <- data$snvs[[i]]$snv$pos[cons_change]
+    mcmc$subs$to[[i]] <- data$snvs[[i]]$snv$to[cons_change]
+
+    isnv_pos <- data$snvs[[i]]$isnv$pos
+    mcmc$bot[[i]] <- logical(0)
+
+    if(length(isnv_pos) > 0){
+      for (p in 1:length(isnv_pos)) {
+        ref_allele <- raw_to_base(ref_genome[[1]][isnv_pos[p]])
+
+        if(data$snvs[[i]]$isnv$a1[p] == ref_allele){
+          # Does a1 match the ref allele? If so, a1 is in the bottleneck
+          mcmc$bot[[i]][p] <- T
+        }else if(data$snvs[[i]]$isnv$a2[p] == ref_allele){
+          # Does a2 match the ref allele? If so, it's in the bottleneck
+          mcmc$bot[[i]][p] <- F
+        }else{
+          # If neither, then whichever is the consensus allele is in the bottleneck
+          mcmc$bot[[i]][p] <- data$snvs[[i]]$isnv$af1[p] > 0.5
+        }
+      }
     }
   }
 
-  mcmc$b <- 0.05 # Probability bottleneck has size >1
   mcmc$a_g <- a_g # shape parameter of the generation interval
   mcmc$lambda_g <- lambda_g # rate parameter of the generation interval. FOR NOW: fixing at 1.
   mcmc$a_s <- a_s # shape parameter of the sojourn interval
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   mcmc$mu <- init_mu
-  mcmc$p <- init_p
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
   mcmc$R <- R
   mcmc$pi <- 0.2 # Probability of sampling
+  mcmc$N_eff <- log(100)
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
   mcmc$seq <- list()
   mcmc$seq[[1]] <- 0
   mcmc$seq[2:n] <- lapply(2:n, get_ts, mcmc = mcmc, data = data)
+
+  # Times at which mutations occur
+  mcmc$tmu <- list()
+
+  for (i in 1:n) {
+    n_subs <- length(mcmc$subs$from[[i]])
+    if(n_subs > 0){
+      mcmc$tmu[[i]] <- runif(n_subs, 0, mcmc$seq[[i]][1])
+    }else{
+      mcmc$tmu[[i]] <- numeric(0)
+    }
+  }
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes

@@ -57,29 +57,6 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
     # Alternate allele
     alt <- vcf$V5
 
-    # Which allele is present in the root?
-    root_allele <- raw_to_base(seq1[pos])
-
-    # For which positions does the root allele match the ALT allele?
-    # We will need to swap the ref and alt at such positions
-    root_alt <- which(root_allele == alt)
-
-    # What's the ref allele at these positions
-    ref_swap <- ref[root_alt]
-
-    # What's the alt allele at these positions
-    alt_swap <- alt[root_alt]
-
-    # Swap
-    ref[root_alt] <- alt_swap
-    alt[root_alt] <- ref_swap
-
-    # Final scenario: the root allele is neither ref nor alt
-    neither <- which(root_allele != alt & root_allele != ref)
-
-    # Here, simply set the ref category to the root
-    ref[neither] <- root_allele[neither]
-
     # Info column
     info <- vcf$V8
 
@@ -105,10 +82,36 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
     alt <- alt[keep]
     af <- af[keep]
 
-    out$isnv$call <- paste0(ref, pos, alt)
-    out$isnv$pos <- pos
-    out$isnv$af <- af
+    # 1st allele, alphabetically
+    out$isnv$a1 <- c()
+    # 2nd allele, alphabetically
+    out$isnv$a2 <- c()
+    # Mutated proportion of first allele
+    out$isnv$af1 <- c()
+    # Position
+    out$isnv$pos <- integer(0)
 
+    for (p in unique(pos)) {
+      out$isnv$pos <- c(out$isnv$pos, p)
+      props <- rep(0, 4)
+      rows <- which(pos == p)
+      afs <- af[rows]
+      alts <- alt[rows]
+      refs <- ref[rows]
+      props[match(alts, c("A", "C", "G", "T"))] <- afs
+      props[match(refs[1], c("A", "C", "G", "T"))] <- 1 - sum(afs)
+
+      # Which props are nonzero
+      nonzero <- which(props > 0)
+      out$isnv$a1 <- c(out$isnv$a1, c("A", "C", "G", "T")[nonzero[1]])
+      out$isnv$a2 <- c(out$isnv$a2, c("A", "C", "G", "T")[nonzero[2]])
+      out$isnv$af1 <- c(out$isnv$af1, props[nonzero[1]])
+
+      if(sum(props > 0) > 2){
+        print("Triallelic")
+        print(props)
+      }
+    }
   }
 
   out$snv <- list()
@@ -125,19 +128,13 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
     !(seq2 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
   )
 
-  # Remove positions already accounted for in VCF, if provided
-  if(!is.null(vcf)){
-    snv_pos <- setdiff(snv_pos, pos)
-    missing_pos <- setdiff(missing_pos, pos)
-  }
-
   old <- raw_to_base(seq1[snv_pos])
   new <- raw_to_base(seq2[snv_pos])
 
-  out$snv$call <- paste0(old, snv_pos, new)
+  out$snv$from <- old
   out$snv$pos <- snv_pos
-  out$missing <- list()
-  out$missing$pos <- missing_pos
+  out$snv$to <- new
+  out$missing <- missing_pos
 
   return(out)
 
@@ -193,127 +190,97 @@ get_ts <- function(mcmc, data, i){
 
 }
 
-# JC evolution
-evolveJC <- function(init, mu, delta_t){
-  1/4 + (init - 1/4)*exp(-(4*mu/3) * delta_t)
+# Get total evolutionary time
+evo_time <- function(i, mcmc){
+  mcmc$seq[[i]][1] - mcmc$seq[[mcmc$h[i]]][1]
 }
 
-# Get initial bottleneck, given composition in the form (fraction of absent particles, fraction of present particles)
-init_bot <- function(init_absent, init_present, mu, b, delta_t){
-  init <- c(init_absent, init_present)
-  # Evolve composition forward
-  if(delta_t > 0){
-    init <- evolveJC(init, mu, delta_t)
-  }
-
-  return(c(
-    (1-b) * init[1] + b * init[1]^2,
-    b * 2 * init[1] * init[2],
-    (1-b) * init[2] + b * init[2]^2
-  ))
+tot_evo_time <- function(mcmc){
+  sum(sapply(2:mcmc$n, evo_time, mcmc = mcmc))
 }
 
-# Evolve P(absent, isnv, present) from bottleneck to bottleneck
-evolve_bot <- function(bot, mu, b, delta_t){
-  # If the SNV starts as absent, what fraction of particles are still absent, and what fraction are present?
-  probs_start_absent <- evolveJC(c(1,0), mu, delta_t)
-
-  # If the SNV starts as present, what fraction of particles have the absent type, and what fraction are present?
-  probs_start_present <- evolveJC(c(0,1), mu, delta_t)
-
-  # Limitation: not accounting for types other than present/absent going thru bottleneck; hence, probabilities won't sum to 1
-
-  # Probability absent at next bottleneck
-  p_absent <-
-    # Absent to absent
-    bot[1] * ((1-b) * probs_start_absent[1] + b * probs_start_absent[1]^2) +
-    # iSNV to absent
-    bot[2] * (((1-b) / 2) + (b / 3)) +
-    # Present to absent
-    bot[3] * ((1-b) * probs_start_present[1] + b * probs_start_present[1]^2)
-
-  # Probability iSNV at next bottleneck
-  p_isnv <-
-    # Absent to iSNV
-    bot[1] * b * 2 * probs_start_absent[1] * probs_start_absent[2] +
-    # iSNV to iSNV
-    bot[2] * b / 3 +
-    # Present to iSNV
-    bot[3] * b * 2 * probs_start_present[1] * probs_start_present[2]
-
-  # Probability present at next bottleneck
-  p_present <-
-    # Absent to present
-    bot[1] * ((1-b) * probs_start_absent[2] + b * probs_start_absent[2]^2) +
-    # iSNV to present
-    bot[2] * (((1-b) / 2) + (b / 3)) +
-    # Present to present
-    bot[3] * ((1-b) * probs_start_present[2] + b * probs_start_present[2]^2)
-
-  return(c(p_absent, p_isnv, p_present))
-}
-
-# Evolve P(absent, isnv, present) from bottleneck to bottleneck, repeatedly for a transmission chain
-evolve_bot_repeatedly <- function(bot, mu, b, deltas){
-  if(length(deltas) == 0){
-    return(bot)
-  }
-
-  for (delta_t in deltas) {
-    bot <- evolve_bot(bot, mu, b, delta_t)
-  }
-
-  return(bot)
-}
-
-
-# Log probability of genetic information in i, given bottleneck probs infecting i
-log_p_given_bot <- function(bot, freq, p, p_new_isnv, log_p_no_isnv){
-  if(freq == 0){
-    log(bot[1]) + log_p_no_isnv
-  }else if(freq == 1){
-    log(bot[3]) + log_p_no_isnv
+# Probability density function for the waiting time to a denovo iSNV at a given site
+ddenovo <- function(x, mu, N_eff, log){
+  if(log){
+    mu - exp(N_eff*x)*mu + N_eff*x + log(N_eff) + log(mu)
   }else{
+    exp(mu - exp(N_eff*x)*mu + N_eff*x) * N_eff * mu
+  }
+}
+
+# Cumulative density function
+pdenovo <- function(x, mu, N_eff, log){
+  out <- 1 - exp(-mu * (exp(N_eff *x) - 1))
+  if(log){
+    return(log(out))
+  }else{
+    return(out)
+  }
+}
+
+# Survival function of denovo frequencies
+sdenovo <- function(x, mu, N_eff, log){
+  if(log){
+    -mu * (exp(N_eff *x) - 1)
+  }else{
+    exp(-mu * (exp(N_eff *x) - 1))
+  }
+}
+
+# Marginal PDF of frequencies of denovo iSNVs
+dprop <- function(x, mu, log){
+  if(log){
+    log(mu) - 2 * log(mu + x - mu*x)
+  }else{
+    mu/(mu + x - mu *x)^2
+  }
+}
+
+# CDF
+pprop <- function(x, mu, log){
+  if(log){
+    log(x) - log(mu + x - mu*x)
+  }else{
+    x/(mu + x - mu * x)
+  }
+}
+
+# Survival
+sprop <- function(x, mu, log){
+  if(log){
+    log(mu - mu * x) - log(mu + x - mu*x)
+  }else{
+    (mu - mu * x)/(mu + x - mu * x)
+  }
+}
+
+# Probability density that the iSNV frequency is x AND the first substituion occurred by the time the viral population is N
+dprop_bounded <- function(x, N, mu, log){
+  if(log){
     log(
-      bot[1] * p_new_isnv * denovo(freq, p) +
-        bot[2] +
-        bot[3] * p_new_isnv * denovo(1 - freq, p)
-    )
-  }
-}
-
-# Probabilities of successive split bottlenecks, starting with init (initial frequency) (can be a vector)
-p_all_split <- function(b, w, init){
-  (b^(w + 1) * 2 * init * (1 - init) / 3^w)
-}
-
-
-# Distribution of de novo iSNVs
-denovo <- function(x, p, log = FALSE){
-  k <- 1/sqrt(p)
-  if(log){
-    log(1-(1-x)^k * (1 + k*x)) - log(k) - 2*log(x)
+      (mu + (1 - mu)^N * mu * (1 - x)^N * (-1 + mu * N * (-1 + x) - N * x))
+    ) -
+      2 * log(
+        (mu + x - mu * x)
+      )
   }else{
-    (1-(1-x)^k * (1 + k*x)) / (k*x^2)
+    (mu + (1 - mu)^N * mu * (1 - x)^N * (-1 + mu * N * (-1 + x) - N * x))/(mu + x - mu * x)^2
   }
 }
 
-# CDF of distribution of de novo iSNVs
-denovo_cdf <- function(x, p){
-  k <- 1/sqrt(p)
-  ((1-x)^(k+1) + k*x + x - 1)/(k*x)
-}
-
-# Distribution of de novo iSNVs, normalized
-denovo_normed <- function(x, p, filters, log = FALSE){
-  k <- 1/sqrt(p)
+# Probability that the iSNV frequency doesn't exceed x AND the first substituion occurred by the time the viral population is N
+pprop_bounded <- function(x, N, mu, log){
   if(log){
-    log(1-(1-x)^k * (1 + k*x)) - log(k) - 2*log(x) - log(1 - denovo_cdf(filters$af, p))
+    log(
+      (-x + (1 - mu)^N * (mu * (-1 + (1 - x)^N) * (-1 + x) + x))
+    ) -
+      log(
+        (mu * (-1 + x) - x)
+      )
   }else{
-    ((1-(1-x)^k * (1 + k*x)) / (k*x^2)) / (1 - denovo_cdf(filters$af, p))
+    (-x + (1 - mu)^N * (mu * (-1 + (1 - x)^N) * (-1 + x) + x))/(mu * (-1 + x) - x)
   }
 }
-
 
 ## Maximum time of infection for a host i
 # If fix_child_seq = F, we allow max_t to go all the way up to the min of mcmc$seq[[j]][1] for j child of i
@@ -453,9 +420,7 @@ softmax <- function(v, tau){
 
 ## Score function: approximates the utility of attaching i to j in terms of parsimony
 score <- function(mcmc, i, j){
-  sum(mcmc$m01[[i]] %in% union(mcmc$m01[[j]], mcmc$m0x[[j]])) +
-    sum(mcmc$m10[[i]] %in% union(mcmc$m10[[j]], mcmc$m1x[[j]])) +
-    sum(union(mcmc$m0y[[i]], mcmc$m1y[[i]]) %in% union(mcmc$m0y[[j]], mcmc$m1y[[j]]))
+  length(intersect(mcmc$subs$pos[[i]], mcmc$subs$pos[[j]]))
 }
 
 ## Path from i to j, going down then up
@@ -471,145 +436,73 @@ paths <- function(h, i, j){
 
 
 # Update genetics for the following topological move:
+# Upstream:
 # From g -> i, g -> h
 # To g -> h -> i
-update_genetics_upstream <- function(mcmc, i, h){
 
-  # Proposal
-  prop <- mcmc
-
-  # Everything that doesn't stay the same in i
-  all_i <- unique(c(
-    mcmc$m01[[i]],
-    mcmc$m10[[i]],
-    mcmc$m0y[[i]],
-    mcmc$m1y[[i]],
-    mcmc$mx0[[i]],
-    mcmc$mx1[[i]],
-    mcmc$mxy[[i]]
-  ))
-
-  # Everything that doesn't stay the same in h
-  all_h <- unique(c(
-    mcmc$m01[[h]],
-    mcmc$m10[[h]],
-    mcmc$m0y[[h]],
-    mcmc$m1y[[h]],
-    mcmc$mx0[[h]],
-    mcmc$mx1[[h]],
-    mcmc$mxy[[h]]
-  ))
-
-  prop$m01[[i]] <- setdiff(mcmc$m01[[i]], all_h) # 00 in h, 01 in i
-  prop$m01[[i]] <- union(prop$m01[[i]], intersect(mcmc$mx0[[h]], mcmc$mx1[[i]])) # x0 in h, x1 in i
-  prop$m01[[i]] <- union(prop$m01[[i]], setdiff(mcmc$m10[[h]], all_i)) # 10 in h, 11 in i
-
-  prop$m10[[i]] <- setdiff(mcmc$m10[[i]], all_h) # 11 in h, 10 in i
-  prop$m10[[i]] <- union(prop$m10[[i]], intersect(mcmc$mx1[[h]], mcmc$mx0[[i]])) # x1 in h, x0 in i
-  prop$m10[[i]] <- union(prop$m10[[i]], setdiff(mcmc$m01[[h]], all_i)) # 01 in h, 00 in i
-
-  prop$m0y[[i]] <- setdiff(mcmc$m0y[[i]], all_h) # 00 in h, 0y in i
-  prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$m10[[h]], mcmc$m1y[[i]])) # 10 in h, 1y in i
-  prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$mx0[[h]], mcmc$mxy[[i]])) # x0 in h, xy in i
-
-  prop$m1y[[i]] <- setdiff(mcmc$m1y[[i]], all_h) # 11 in h, 1y in i
-  prop$m1y[[i]] <- union(prop$m1y[[i]], intersect(mcmc$m01[[h]], mcmc$m0y[[i]])) # 01 in h, 0y in i
-  prop$m1y[[i]] <- union(prop$m1y[[i]], intersect(mcmc$mx1[[h]], mcmc$mxy[[i]])) # x1 in h, xy in i
-
-  prop$mx0[[i]] <- intersect(mcmc$mxy[[h]], mcmc$mx0[[i]]) # xy in h, x0 in i
-  prop$mx0[[i]] <- union(prop$mx0[[i]], setdiff(mcmc$m0y[[h]], all_i)) # 0y in h, 00 in i
-  prop$mx0[[i]] <- union(prop$mx0[[i]], intersect(mcmc$m1y[[h]], mcmc$m10[[i]])) # 1y in h, 10 in i
-
-  prop$mx1[[i]] <- intersect(mcmc$mxy[[h]], mcmc$mx1[[i]]) # xy in h, x1 in i
-  prop$mx1[[i]] <- union(prop$mx1[[i]], setdiff(mcmc$m1y[[h]], all_i)) # 1y in h, 11 in i
-  prop$mx1[[i]] <- union(prop$mx1[[i]], intersect(mcmc$m0y[[h]], mcmc$m01[[i]])) # 0y in h, 01 in i
-
-  prop$mxy[[i]] <- intersect(mcmc$mxy[[h]], mcmc$mxy[[i]]) # xy in h, xy in i
-  prop$mxy[[i]] <- union(prop$mxy[[i]], intersect(mcmc$m1y[[h]], mcmc$m1y[[i]])) # 1y in h, 1y in i
-  prop$mxy[[i]] <- union(prop$mxy[[i]], intersect(mcmc$m0y[[h]], mcmc$m0y[[i]])) # 0y in h, 0y in i
-
-  # Whew.
-  return(prop)
-}
-
-# Update genetics for the following topological move:
+# Downstream:
 # From g -> h -> i
 # To g -> i, g -> h
-update_genetics_downstream <- function(mcmc, i, h){
+update_genetics <- function(mcmc, i, h, upstream){
 
-  prop <- mcmc
+  if(upstream){
+    # These are reversed, because when we first move i onto h, we have to delete everything that was added from g to h, then adjust based on what's added h to i
+    from <- mcmc$subs$to[[h]]
+    pos <- mcmc$subs$pos[[h]]
+    to <- mcmc$subs$from[[h]]
+  }else{
+    from <- mcmc$subs$from[[h]]
+    pos <- mcmc$subs$pos[[h]]
+    to <- mcmc$subs$to[[h]]
+  }
 
-  # Everything that doesn't stay the same in i
-  all_i <- unique(c(
-    mcmc$m01[[i]],
-    mcmc$m10[[i]],
-    mcmc$m0y[[i]],
-    mcmc$m1y[[i]],
-    mcmc$mx0[[i]],
-    mcmc$mx1[[i]],
-    mcmc$mxy[[i]]
-  ))
+  if(length(mcmc$subs$pos[[i]]) > 0){
+    for (j in 1:length(mcmc$subs$pos[[i]])) {
+      if(mcmc$subs$pos[[i]][j] %in% pos){
+        ind <- which(pos == mcmc$subs$pos[[i]][j])
+        # Update the "to" allele
+        to[ind] <- mcmc$subs$to[[i]][j]
+      }else{
+        from <- c(from, mcmc$subs$from[[i]][j])
+        pos <- c(pos, mcmc$subs$pos[[i]][j])
+        to <- c(to, mcmc$subs$to[[i]][j])
+      }
+    }
+  }
 
-  # Everything that doesn't stay the same in h
-  all_h <- unique(c(
-    mcmc$m01[[h]],
-    mcmc$m10[[h]],
-    mcmc$m0y[[h]],
-    mcmc$m1y[[h]],
-    mcmc$mx0[[h]],
-    mcmc$mx1[[h]],
-    mcmc$mxy[[h]]
-  ))
+  # Clear out SNVs where from == to
+  keep <- from != to
 
-  prop$m01[[i]] <- setdiff(mcmc$m01[[h]], all_i) # 01 in h, 11 in i
-  prop$m01[[i]] <- union(prop$m01[[i]], intersect(mcmc$m0y[[h]], mcmc$mx1[[i]])) # 0y in h, x1 in i
-  prop$m01[[i]] <- union(prop$m01[[i]], setdiff(mcmc$m01[[i]], all_h)) # 00 in h, 01 in i
+  mcmc$subs$from[[i]] <- from[keep]
+  mcmc$subs$pos[[i]] <- pos[keep]
+  mcmc$subs$to[[i]] <- to[keep]
 
-  prop$m10[[i]] <- setdiff(mcmc$m10[[h]], all_i) # 10 in h, 00 in i
-  prop$m10[[i]] <- union(prop$m10[[i]], intersect(mcmc$m1y[[h]], mcmc$mx0[[i]])) # 1y in h, x0 in i
-  prop$m10[[i]] <- union(prop$m10[[i]], setdiff(mcmc$m10[[i]], all_h)) # 11 in h, 10 in i
+  return(mcmc)
 
-  prop$m0y[[i]] <- setdiff(mcmc$m0y[[i]], all_h) # 00 in h, 0y in i
-  prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$m01[[h]], mcmc$m1y[[i]])) # 01 in h, 1y in i
-  prop$m0y[[i]] <- union(prop$m0y[[i]], intersect(mcmc$m0y[[h]], mcmc$mxy[[i]])) # 0y in h, xy in i
-
-  prop$m1y[[i]] <- setdiff(mcmc$m1y[[i]], all_h) # 11 in h, 1y in i
-  prop$m1y[[i]] <- union(prop$m1y[[i]], intersect(mcmc$m10[[h]], mcmc$m0y[[i]])) # 10 in h, 0y in i
-  prop$m1y[[i]] <- union(prop$m1y[[i]], intersect(mcmc$m1y[[h]], mcmc$mxy[[i]])) # 1y in h, xy in i
-
-  prop$mx0[[i]] <- intersect(mcmc$mxy[[h]], mcmc$mx0[[i]]) # xy in h, x0 in i
-  prop$mx0[[i]] <- union(prop$mx0[[i]], setdiff(mcmc$mx0[[h]], all_i)) # x0 in h, 00 in i
-  prop$mx0[[i]] <- union(prop$mx0[[i]], intersect(mcmc$mx1[[h]], mcmc$m10[[i]])) # x1 in h, 10 in i
-
-  prop$mx1[[i]] <- intersect(mcmc$mxy[[h]], mcmc$mx1[[i]]) # xy in h, x1 in i
-  prop$mx1[[i]] <- union(prop$mx1[[i]], setdiff(mcmc$mx1[[h]], all_i)) # x1 in h, 11 in i
-  prop$mx1[[i]] <- union(prop$mx1[[i]], intersect(mcmc$mx0[[h]], mcmc$m01[[i]])) # x0 in h, 01 in i
-
-  prop$mxy[[i]] <- intersect(mcmc$mxy[[h]], mcmc$mxy[[i]]) # xy in h, xy in i
-  prop$mxy[[i]] <- union(prop$mxy[[i]], intersect(mcmc$mx1[[h]], mcmc$m1y[[i]])) # x1 in h, 1y in i
-  prop$mxy[[i]] <- union(prop$mxy[[i]], intersect(mcmc$mx0[[h]], mcmc$m0y[[i]])) # x0 in h, 0y in i
-
-  # Whew.
-  return(prop)
 }
 
+
+
 # Wrap as a function: switch from
+# Upstream = T
 # h_old -> i, h_old -> h_new to
 # h_old -> h_new -> i
-shift_upstream <- function(mcmc, data, i, h_old, h_new){
-  # Update all necessary components of MCMC
-  mcmc$h[i] <- h_new # Update the ancestor
-  mcmc <- update_genetics_upstream(mcmc, i, h_new) # Update genetics. i is inheriting from h_new.
-  return(mcmc)
-}
-
-# Wrap as a function: switch from
+# Upstream = F
 # h_new -> h_old -> i
 # h_old -> i, h_new -> i
-shift_downstream <- function(mcmc, data, i, h_old, h_new){
+
+
+shift <- function(mcmc, data, i, h_old, h_new, upstream){
   # Update all necessary components of MCMC
   mcmc$h[i] <- h_new # Update the ancestor
-  mcmc <- update_genetics_downstream(mcmc, i, h_old) # Update genetics. i is inheriting from h_new, but compared to genetics of h_old
+  # For update genetics upstream, h represents the new ancestor
+  if(upstream){
+    mcmc <- update_genetics(mcmc, i, h_new, TRUE) # Update genetics. i is inheriting from h_new.
+  }else{
+    # For update genetics downstream, h represents the old ancestor
+    mcmc <- update_genetics(mcmc, i, h_old, FALSE)
+  }
+
   return(mcmc)
 }
 
@@ -789,6 +682,9 @@ snv_status <- function(mcmc, i, js, snv){
 
 # Accept / reject
 accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsimony = integer(0), noisy = FALSE){
+  if(is.infinite(hastings)){
+    stop("hastings error")
+  }
 
   if(length(check_parsimony) > 0){
     for (k in check_parsimony) {

@@ -27,7 +27,7 @@
 # Resample seq, the time of infection of a node i and the ancestors of i along the edge from h to i
 # If fix_latest_host, we don't resample the time of infection for mcmc$seq[[i]][1]
 # output can be "all" or "log_p_new_old"
-resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all"){
+resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all", also_resample_tmu){
   # Ancestor of i
   h <- mcmc$h[i]
 
@@ -53,6 +53,11 @@ resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all"){
 
   w_old <- length(seq_old)
   log_p_new_old <- dw(w_old, mcmc, min_t, max_t, fix_latest_host) + dseq(seq_old, w_old, min_t, max_t, mcmc)
+
+  if(also_resample_tmu){
+    # Probability of sampling tmu
+    log_p_new_old <- log_p_new_old + resample_tmu(mcmc, data, i, output = "log_p_new_old")
+  }
 
   if(output == "log_p_new_old"){
     return(log_p_new_old)
@@ -82,11 +87,51 @@ resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all"){
     }
   }
 
+  if(also_resample_tmu){
+    # Resample tmu
+    mcmc <- resample_tmu(mcmc, data, i)
+    log_p_old_new <- log_p_old_new + mcmc[[3]]
+    mcmc <- mcmc[[1]]
+  }
+
   return(list(
     mcmc,
     log_p_new_old,
     log_p_old_new
   ))
+}
+
+# Resample times of mutations leading into i
+resample_tmu <- function(mcmc, data, i, output = "all"){
+  max_t <- mcmc$seq[[i]][1]
+
+  h <- mcmc$h[[i]]
+
+  # Min t is time of infection of h
+  min_t <- mcmc$seq[[h]][1]
+
+  # Number of mutations
+  n_mut <- length(mcmc$subs$pos[[i]])
+
+  ### TRYING SIMPLER VERISION: uniform draws
+  if(n_mut != length(mcmc$tmu[[i]]) | max_t <= min_t){
+    log_p_new_old <- -Inf
+  }else{
+    log_p_new_old <- n_mut * log(1 / (max_t - min_t))
+  }
+
+  mcmc$tmu[[i]] <- runif(n_mut, min_t, max_t)
+  log_p_old_new <- n_mut * log(1 / (max_t - min_t))
+
+  if(output == "log_p_new_old"){
+    return(log_p_new_old)
+  }else{
+    return(list(
+      mcmc,
+      log_p_new_old,
+      log_p_old_new
+    ))
+  }
 
 }
 
@@ -95,28 +140,28 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
 
   js <- which(mcmc$h == i)
 
-  # SNVs where we may need to make a change to get parsimony
-  snvs <- unique(c(
-    mcmc$m01[[i]],
-    mcmc$m0y[[i]],
-    mcmc$m1y[[i]],
-    mcmc$m10[[i]],
-    mcmc$mx0[[i]],
-    mcmc$mxy[[i]],
-    mcmc$mx1[[i]],
-    unlist(mcmc$m01[js]),
-    unlist(mcmc$m0y[js]),
-    unlist(mcmc$m1y[js]),
-    unlist(mcmc$m10[js]),
-    unlist(mcmc$mx0[js]),
-    unlist(mcmc$mxy[js]),
-    unlist(mcmc$mx1[js])
-  ))
+  # Positions on the genome where we may need to make a change to get parsimony
+  pos <- c(
+    mcmc$subs$pos[[i]],
+    unlist(mcmc$subs$pos[js])
+  )
+  # The allele in i at these positions
+  current <- c(
+    mcmc$subs$to[[i]],
+    unlist(mcmc$subs$from[js])
+  )
+  # The allele in neighbors at these positions
+  neighbor <- c(
+    mcmc$subs$from[[i]],
+    unlist(mcmc$subs$to[js])
+  )
 
-
-  # If i is observed, the only positions that can change are those with missing data
+  # If i is observed, the only positions that can change are those with missing data or iSNVs
   if(i <= data$n_obs){
-    snvs <- intersect(snvs, data$snvs[[i]]$missing$call)
+    keep <- pos %in% data$pos[[i]]$missing | pos %in% data$pos[[i]]$isnv$pos
+    pos <- pos[keep]
+    current <- current[keep]
+    neighbor <- neighbor[keep]
   }
 
   # Number of neighbors (h[i] and js)
@@ -126,85 +171,130 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
   log_p_new_old <- 0
   log_p_old_new <- 0
 
-  for (snv in snvs) {
+  # First get probabilities of tmu for old state
+  # Unnecessary if this function is just to check parsimony
+  if(!check_parsimony){
+    for (j in c(i, js)) {
+      log_p_new_old <- log_p_new_old + resample_tmu(mcmc, data, j, output = "log_p_new_old")
+    }
+  }
 
-    ## Step 1: figure out if the snv is absent, isnv, or present in i
-    from <- snv_status(mcmc, i, js, snv)
+  for (p in unique(pos)) {
 
-    ## Step 2: Figure out the "ideal" (most parsimonious) state of the snv
-    if(from == "absent"){
-      # How many times does snv appear as present in neighbors?
-      n_present <- sum(
-        c(mcmc$m10[[i]], unlist(mcmc$m01[js])) == snv
-      )
+    # Counts of A, C, G, T in neighbors of i
+    counts <- rep(0, 4)
+    counts[1] <- sum(pos == p & neighbor == "A")
+    counts[2] <- sum(pos == p & neighbor == "C")
+    counts[3] <- sum(pos == p & neighbor == "G")
+    counts[4] <- sum(pos == p & neighbor == "T")
 
-      # How many times does snv appear as iSNV in neighbors?
-      n_isnv <- sum(
-        c(mcmc$mx0[[i]], unlist(mcmc$m0y[js])) == snv
-      )
+    # Letter and index of current nucleotide
+    letter_current <- (current[pos == p])[1]
+    ind_current <- match(letter_current, c("A", "C", "G", "T"))
 
-      n_absent <- n_neighbors - n_present - n_isnv
+    # Whichever neighbors didn't exhibit a substitution have the current nucleotide
+    counts[ind_current] <- counts[ind_current] + n_neighbors - sum(counts)
+
+    if(sum(counts) != n_neighbors){
+      stop("Parsimony table error")
     }
 
-    if(from == "isnv"){
-      # How many times does snv appear as present in neighbors?
-      n_present <- sum(
-        c(mcmc$m1y[[i]], unlist(mcmc$mx1[js])) == snv
-      )
+    # Parsimonious states are whichever counts equal the maximum of count
+    parsimonious <- c("A", "C", "G", "T")[which(counts == max(counts))]
 
-      # How many times does snv appear as iSNV in neighbors?
-      n_isnv <- sum(
-        c(mcmc$mxy[[i]], unlist(mcmc$mxy[js])) == snv
-      )
+    # If i observed and has iSNV, parsimonious state must be one of the observed iSNV states
+    if(i <= data$n_obs){
+      if(p %in% data$snvs[[i]]$isnv$pos){
+        # Index of iSNV in i
+        ind_isnv <- match(p, data$pos[[i]]$isnv$pos)
 
-      n_absent <- n_neighbors - n_present - n_isnv
+        parsimonious <- intersect(
+          parsimonious,
+          c(data$snvs[[i]]$isnv$a1, data$snvs[[i]]$isnv$a2)
+        )
+      }
     }
-
-    if(from == "present"){
-      # How many times does snv appear as ABSENT in neighbors?
-      n_absent <- sum(
-        c(mcmc$m01[[i]], unlist(mcmc$m10[js])) == snv
-      )
-
-      # How many times does snv appear as iSNV in neighbors?
-      n_isnv <- sum(
-        c(mcmc$mx1[[i]], unlist(mcmc$m1y[js])) == snv
-      )
-
-      n_present <- n_neighbors - n_absent - n_isnv
-    }
-
-    ## In strict mode: parsimony given by whichever is more, present or absent, among neighbors.
-    ## 50/50 in case of tie
-    stat <- n_present + n_isnv / 2
-    if(stat > n_neighbors / 2){
-      ideal <- "present"
-    }else if(stat < n_neighbors / 2){
-      ideal <- "absent"
-    }else{
-      ideal <- "cointoss"
-    }
-
 
     ## We now have all the info we need to make the move
     if(check_parsimony){
-      if((from == "absent" & ideal == "present") | (from == "present" & ideal == "absent")){
+      if(!(letter_current %in% parsimonious)){
         return(F)
       }
     }
 
-    if(ideal == "cointoss"){
-      log_p_new_old <- log_p_new_old + log(1/2) # Designator that the ideal is ambiguous
-      ideal <- sample(c("present", "absent"), 1)
-      log_p_old_new <- log_p_old_new + log(1/2)
+    if(!check_parsimony & output == "log_p_new_old"){
+      if(!(letter_current %in% parsimonious)){
+        stop("The current state is not parsimonious")
+      }
     }
 
-    if(output == "all"){
-      new <- change_genotype(mcmc, data, snv, from, ideal, i, js, snv %in% observed)
-      mcmc <- new[[1]]
-      log_p_old_new <- log_p_old_new + new[[2]]
-      if(new[[2]] != 0){
-        stop("weird")
+    # P(new to old): pick one of the (possibly several) parsimonious states
+    log_p_new_old <- log_p_new_old + log(1 / length(parsimonious))
+
+    if(output == "all" & !check_parsimony){
+
+      letter_new <- sample(parsimonious, 1)
+      # P(new to old): pick one of the (possibly several) parsimonious states
+      log_p_old_new <- log_p_old_new + log(1 / length(parsimonious))
+
+      ## Update genotype
+      if(letter_current != letter_new){
+        # Update subs[[i]]
+        if(p %in% mcmc$subs$pos[[i]]){
+          # What's the index of the substitution leading into i that has position "p"?
+          ind <- match(p, mcmc$subs$pos[[i]])
+          if(mcmc$subs$from[[i]][ind] == letter_new){
+            # If the new letter at i matches the from, we're substituting from a nucleotide to itself
+            mcmc$subs$from[[i]] <- mcmc$subs$from[[i]][-ind]
+            mcmc$subs$pos[[i]] <- mcmc$subs$pos[[i]][-ind]
+            mcmc$subs$to[[i]] <- mcmc$subs$to[[i]][-ind]
+          }else{
+            # Otherwise, we've created a new "to" with the same from
+            mcmc$subs$to[[i]][ind] <- letter_new
+          }
+        }else{
+          # If no mutation present, add it
+          mcmc$subs$from[[i]] <- c(mcmc$subs$from[[i]], letter_current)
+          mcmc$subs$pos[[i]] <- c(mcmc$subs$pos[[i]], p)
+          mcmc$subs$to[[i]] <- c(mcmc$subs$to[[i]], letter_new)
+        }
+
+        # Update subs[[j]]
+        for (j in js) {
+          if(p %in% mcmc$subs$pos[[j]]){
+            # What's the index of the substitution leading into j that has position "p"?
+            ind <- match(p, mcmc$subs$pos[[j]])
+            # If the new letter at i matches the to, we're substituting from a nucleotide to itself
+            if(mcmc$subs$to[[j]][ind] == letter_new){
+              mcmc$subs$from[[j]] <- mcmc$subs$from[[j]][-ind]
+              mcmc$subs$pos[[j]] <- mcmc$subs$pos[[j]][-ind]
+              mcmc$subs$to[[j]] <- mcmc$subs$to[[j]][-ind]
+            }else{
+              # Otherwise, we've created a new "from" with the same to
+              mcmc$subs$from[[j]][ind] <- letter_new
+            }
+          }else{
+            # If no mutation present, add it
+            mcmc$subs$from[[j]] <- c(mcmc$subs$from[[j]], letter_new)
+            mcmc$subs$pos[[j]] <- c(mcmc$subs$pos[[j]], p)
+            mcmc$subs$to[[j]] <- c(mcmc$subs$to[[j]], letter_current)
+          }
+        }
+
+        ## Update bot[[i]]
+        if(i <= data$n_obs){
+          if(data$vcf_present[i]){
+            # What's the index of the relevant iSNV in i?
+            ind <- match(p, data$snvs[[i]]$isnv$pos)
+            if(letter_new == data$snvs[[i]]$isnv$a1[ind]){
+              mcmc$bot[[i]][ind] <- TRUE
+            }else if(letter_new == data$snvs[[i]]$isnv$a2[ind]){
+              mcmc$bot[[i]][ind] <- FALSE
+            }else{
+              stop("The proposed allele is neither a1 nor a2")
+            }
+          }
+        }
       }
     }
   }
@@ -217,6 +307,15 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
   if(output == "log_p_new_old"){
     return(log_p_new_old)
   }else{
+
+    # Update tmu
+    for (j in c(i, js)) {
+      # Resample tmu
+      mcmc <- resample_tmu(mcmc, data, j)
+      log_p_old_new <- log_p_old_new + mcmc[[3]]
+      mcmc <- mcmc[[1]]
+    }
+
     return(list(
       mcmc,
       log_p_new_old,
@@ -225,7 +324,7 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
   }
 }
 
-# Check whether it's possible to create a new node
+# Get probability for different possible positions of a new node, up to constant of proportionality
 p_pick_h <- function(mcmc, data){
   ## Select a node with probability proportional to its degree
   # Node degrees

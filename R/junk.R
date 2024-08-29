@@ -1457,3 +1457,119 @@
 # if(init_ancestry){
 #   init_h <- read.table(paste0("./", indir, "/ancestry.csv"))[,1]
 # }
+
+
+# Threshold value: after this time, the expected frequency of an iSNV is below the af cutoff
+threshold <- min_t + log(1 / data$filters$af) / mcmc$N_eff
+
+# Threshold has to be before the first host on the transmission chain h to i gets infected
+threshold <- min(threshold, mcmc$seq[[i]][length(mcmc$seq[[i]])])
+
+# Time intervals before and after threshold
+delta_before <- threshold - min_t
+delta_after <- max_t - threshold
+
+
+
+# It's possible that the threshold is actually the same as when i gets infected. If so, all mutations must occur before threshold.
+# This case also applies if no iSNV info for h
+# if(threshold == max_t | !data$vcf_present[h] | h > data$n_obs){
+#
+#   # If this config is impossible, report its probability as 0
+#   if(mcmc$seq[[i]][length(mcmc$seq[[i]])] <= mcmc$seq[[h]][1] | n_mut != length(mcmc$tmu[[i]])){
+#     log_p_new_old <- -Inf
+#   }else{
+#     log_p_new_old <- n_mut * log(1 / (max_t - min_t))
+#   }
+#
+#   if(output == "log_p_new_old"){
+#     return(log_p_new_old)
+#   }
+#
+#   # Resample times of mutation
+#   if(min_t == max_t){
+#     stop("too small interval")
+#   }
+#   mcmc$tmu[[i]] <- runif(n_mut, min_t, max_t)
+#   log_p_old_new <- n_mut * log(1 / (max_t - min_t)) # Symmetric always
+# }else{
+#   # Get whether each mutation in i should ideally be before or after threshold
+#   before <- rep(F, n_mut)
+#   if(length(before) > 0){
+#     for (j in 1:length(before)) {
+#       # Position of jth mutation
+#       pos <- mcmc$subs$pos[j]
+#
+#       # Is it included in the iSNVs of h?
+#       if(pos %in% data$snvs[[h]]$isnv$pos){
+#         ind <- match(pos, data$snvs[[h]]$isnv$pos)
+#         if(all(
+#           c(mcmc$subs$from[j], mcmc$subs$to[j]) %in% c(data$snvs[[h]]$isnv$a1, data$snvs[[h]]$isnv$a2)
+#         )){
+#           before[j] <- T
+#         }
+#       }
+#     }
+#   }
+#
+#   # P(new to old) = P(current state): split based on whether the ideal state is before or after, and whether the current state is before or after
+#   # Probability of being assigned the ideal state is 0.95
+#   if(mcmc$seq[[i]][length(mcmc$seq[[i]])] <= mcmc$seq[[h]][1] | n_mut != length(mcmc$tmu[[i]])){
+#     log_p_new_old <- -Inf
+#   }else{
+#
+#     log_p_new_old <-
+#       sum(before & mcmc$tmu[[i]] < threshold) * (log(1 / delta_before) + log(0.95)) +
+#       sum(before & mcmc$tmu[[i]] >= threshold) * (log(1 / delta_after) + log(0.05)) +
+#       sum(!before & mcmc$tmu[[i]] < threshold) * (log(1 / delta_before) + log(0.05)) +
+#       sum(!before & mcmc$tmu[[i]] >= threshold) * (log(1 / delta_before) + log(0.95))
+#   }
+#
+#   if(output == "log_p_new_old"){
+#     return(log_p_new_old)
+#   }
+#
+#   if(length(before) > 0){
+#     # Resample mcmc$tmu
+#     mcmc$tmu[[i]] <- numeric(0)
+#     for (j in 1:length(before)) {
+#       if(before[j]){
+#         if(runif(1) < 0.95){
+#           mcmc$tmu[[i]][j] <- runif(1, min_t, threshold)
+#         }else{
+#           mcmc$tmu[[i]][j] <- runif(1, threshold, max_t)
+#         }
+#       }else{
+#         if(runif(1) < 0.95){
+#           mcmc$tmu[[i]][j] <- runif(1, threshold, max_t)
+#         }else{
+#           mcmc$tmu[[i]][j] <- runif(1, min_t, threshold)
+#         }
+#       }
+#     }
+#   }
+#
+#   log_p_old_new <-
+#     sum(before & mcmc$tmu[[i]] < threshold) * (log(1 / delta_before) + log(0.95)) +
+#     sum(before & mcmc$tmu[[i]] >= threshold) * (log(1 / delta_after) + log(0.05)) +
+#     sum(!before & mcmc$tmu[[i]] < threshold) * (log(1 / delta_before) + log(0.05)) +
+#     sum(!before & mcmc$tmu[[i]] >= threshold) * (log(1 / delta_before) + log(0.95))
+#
+# }
+#
+# if(is.infinite(log_p_old_new)){
+#   print(c(min_t, threshold, max_t))
+#   print(delta_before)
+#   print(delta_after)
+#   print(n_mut)
+#   print(mcmc$tmu[[i]])
+#   stop("Infinity error")
+# }
+#
+#
+#
+# return(list(
+#   mcmc,
+#   log_p_new_old,
+#   log_p_old_new
+# ))

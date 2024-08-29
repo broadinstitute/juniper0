@@ -49,432 +49,150 @@ e_lik <- function(mcmc, data){
     # 1st param in NBin offspring distribution
     rho <- mcmc$R * mcmc$psi / (1 - mcmc$psi)
 
+    # The epi likelihood now also includes the term for the JC mutation model
+    prob_JC <- -mcmc$mu * data$n_bases * tot_evo_time(mcmc) + length(unlist(mcmc$subs$from)) * log(mcmc$mu / 3)
+
     return(
-      TransPhylo::probTTree(
+      prob_JC + TransPhylo::probTTree(
         ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, data$t_max, delta_t = 0.1
       )
     )
 }
 
 # Compute genomic log likelihood for each person
-
+# This is now just the probability of the iSNVs layered on top
 g_lik <- function(mcmc, data, i){
 
-  if(mcmc$mu < 0 | mcmc$p < 0 | mcmc$b < 0 | mcmc$b > 1 | (length(mcmc$seq[[i]]) - 1) < 0){
-    return(-Inf)
-  }
-
-  # Ancestor of host i
-  h <- mcmc$h[i]
-
-  # Time of end of exponential growth phase in h
-  t_g <- mcmc$seq[[h]][1] + log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p)
-
-  # Evolutionary time
-  delta_t <- mcmc$seq[[i]][1] - mcmc$seq[[h]][1]
-
-  if(delta_t <= 0){
-    return(-Inf)
-  }
-
-  # If i unobserved, or has no iSNV info provided, simply evolve from end of growth phase in h[i] to end of growth phase in i
-  isnv_info <- TRUE
   if(i > data$n_obs){
-    isnv_info <- FALSE
+    return(0)
   }
-  if(i <= data$n_obs){
-    if(!data$vcf_present[i]){
-      isnv_info <- FALSE
+
+  if(!data$vcf_present[i]){
+    return(0)
+  }
+
+  # iSNVs detected in i
+  isnv_a1 <- data$snvs[[i]]$isnv$a1
+  isnv_pos <- data$snvs[[i]]$isnv$pos
+  isnv_a2 <- data$snvs[[i]]$isnv$a2
+
+  # Proportion of the population that is a de novo iSNV
+  freq <- data$snvs[[i]]$isnv$af1
+  freq[mcmc$bot[[i]]] <- 1 - freq[mcmc$bot[[i]]]
+
+  # Children of i
+  js <- which(mcmc$h == i)
+
+  # Time of emergence of SNVs in global phylogeny that might get picked up as iSNVs
+  trans_isnv_pos <- integer(0)
+  trans_isnv_from <- character(0)
+  trans_isnv_to <- character(0)
+  trans_isnv_time <- numeric(0)
+
+  for (j in js) {
+
+    # Which mutations actually occur in host i?
+    keep <- which(mcmc$tmu[[j]] < mcmc$seq[[j]][length(mcmc$seq[[j]])])
+
+    # Which sites have detected iSNVs that get passed on?
+    trans_isnv_pos <- c(trans_isnv_pos, mcmc$subs$pos[[j]][keep])
+    # What did said sites mutate from?
+    trans_isnv_from <- c(trans_isnv_from, mcmc$subs$from[[j]][keep])
+    # And what did said sites mutate into?
+    trans_isnv_to <- c(trans_isnv_to, mcmc$subs$to[[j]][keep])
+    # And when?
+    trans_isnv_time <- c(trans_isnv_time, mcmc$tmu[[j]][keep])
+  }
+
+  # For each position p, index of minimum time at which there's a mutation at site p
+  keep <- integer(0)
+  for (p in trans_isnv_pos) {
+    keep <- c(
+      keep,
+      which(trans_isnv_pos == p)[which.min(trans_isnv_time[which(trans_isnv_pos == p)])]
+    )
+  }
+
+  trans_isnv_pos <- trans_isnv_pos[keep]
+  trans_isnv_from <- trans_isnv_from[keep]
+  trans_isnv_to <- trans_isnv_to[keep]
+  trans_isnv_time <- trans_isnv_time[keep]
+
+  # Size of viral population at trans_isnv_time
+  trans_isnv_size <- exp(mcmc$N_eff * (trans_isnv_time - mcmc$seq[[i]][1]))
+
+  # Which iSNVs detected in i are also on the global phylogeny
+  local_in_global <- integer(0)
+  # Which iSNVs on the global phylogeny are also detected in i?
+  global_in_local <- integer(0)
+
+  # Which iSNVs detected in i aren't also on the global phylogeny, but occur at the same site as one on the global phylogeny?
+  local_same_site <- integer(0)
+  # Which iSNVs on the global phylogeny aren't also detected in i, but occur at the same site as one detected in i?
+  global_same_site <- integer(0)
+
+  for (p in isnv_pos) {
+    if(p %in% trans_isnv_pos){
+      ind_local <- match(p, isnv_pos)
+      ind_global <- match(p, trans_isnv_pos)
+
+      if(all(
+        c(isnv_a1[ind_local], isnv_a2[ind_local]) %in% c(trans_isnv_from[ind_global], trans_isnv_to[ind_global])
+      )){
+        local_in_global <- c(local_in_global, ind_local)
+        global_in_local <- c(global_in_local, ind_global)
+      }else{
+        local_same_site <- c(local_same_site, ind_local)
+        global_same_site <- c(global_same_site, ind_global)
+      }
     }
   }
 
-  # Evolutionary time from first downstream host of h to infection time of i, approx
-  if(is.infinite(delta_t)){
-    delta_t_prime <- Inf
+  # if(length(local_in_global) > 0){
+  #   print("yay")
+  # }
+
+  if(length(isnv_pos) > 0){
+    local_alone <- setdiff(1:length(isnv_pos), c(local_in_global, local_same_site))
   }else{
-
-    # Time of first transmission on the chain from h to i
-    t_1st_trans <- mcmc$seq[[i]][length(mcmc$seq[[i]])]
-    delta_t_prime <- mcmc$seq[[i]][1] - t_1st_trans
-
-    if(t_1st_trans < mcmc$seq[[h]][1]){
-      return(-Inf)
-    }
+    local_alone <- integer(0)
   }
 
-  # log probability of SPECIFIC iSNV in expo growth phase
-  log_p_isnv <- log(
-    (1 - (1 - mcmc$p)^(1/sqrt(mcmc$p))) * (1 - denovo_cdf(data$filters$af, mcmc$p)) / 3
-  )
-
-  # log probability of no iSNV in expo growth phase
-  log_p_no_isnv <- log(
-    (1 - mcmc$p)^(1/sqrt(mcmc$p)) +
-      (1 - (1 - mcmc$p)^(1/sqrt(mcmc$p))) * denovo_cdf(data$filters$af, mcmc$p)
-  )
-
-  # Number of sites without a mutation
-  no_mut <- data$n_bases -
-    length(mcmc$m01[[i]]) -
-    length(mcmc$m10[[i]]) -
-    length(mcmc$m0y[[i]]) -
-    length(mcmc$m1y[[i]]) -
-    length(mcmc$mx0[[i]]) -
-    length(mcmc$mx1[[i]]) -
-    length(mcmc$mxy[[i]]) #-
-  #length(data$filters$common)
-
-  # print(1/4 + (3/4)*exp(-(4*mcmc$mu/3) * delta_t))
-  # print(evolveJC(1, mcmc$mu, delta_t))
-
-  # Likelihood from x = 0, y = 0 or x = 1, y = 1
-  out <- no_mut * (log(evolveJC(1, mcmc$mu, delta_t)) + ifelse(isnv_info, log_p_no_isnv, 0)) +
-
-    # Likelihood from x = 0, y = 1 and x = 1, y = 0
-    (length(mcmc$m01[[i]]) + length(mcmc$m10[[i]])) * (log(evolveJC(0, mcmc$mu, delta_t)) + ifelse(isnv_info, log_p_no_isnv, 0))
-
-  # If there actually are any reported iSNVs...
-  if(i <= data$n_obs){
-    if(length(data$snvs[[i]]$isnv$call) > 0){
-
-      # Frequencies of added iSNVs
-      freq_0y <- data$snvs[[i]]$isnv$af[match(mcmc$m0y[[i]], data$snvs[[i]]$isnv$call)]
-
-      # Frequencies of deleted iSNVs
-      freq_1y <- data$snvs[[i]]$isnv$af[match(mcmc$m1y[[i]], data$snvs[[i]]$isnv$call)]
-
-      out <- out +
-        # Likelihood from x = 0, 0 < y < 1
-        length(mcmc$m0y[[i]]) * log_p_isnv +
-        sum(log(
-          (evolveJC(1, mcmc$mu, delta_t)) * denovo_normed(freq_0y, mcmc$p, data$filters) +
-            (evolveJC(0, mcmc$mu, delta_t)) * denovo_normed(1 - freq_0y, mcmc$p, data$filters)
-        )) +
-
-        # Likelihood from x = 1, 0 < y < 1
-        length(mcmc$m1y[[i]]) * log_p_isnv +
-        sum(log(
-          (evolveJC(1, mcmc$mu, delta_t))*denovo_normed(1 - freq_1y, mcmc$p, data$filters) +
-            (evolveJC(0, mcmc$mu, delta_t))*denovo_normed(freq_1y, mcmc$p, data$filters)
-        ))
-
-      if(h <= data$n_obs){
-        if(length(data$snvs[[h]]$isnv$call) > 0){
-
-          # Frequency of shared iSNV in ancestor of case i
-          freq_xy_anc <- data$snvs[[h]]$isnv$af[match(mcmc$mxy[[i]], data$snvs[[h]]$isnv$call)]
-
-          # If transmission occurred before end of exponential growth phase, need to back-mutate these frequencies.
-          if(t_1st_trans < t_g){
-            # To do this, we need to figure out what frequency they started at at t[h], on average
-            start_freqs_xy <- rep(0, length(mcmc$mxy[[i]]))
-
-            # Which of mcmc$mx0 are 1y in h?
-            start_freqs_xy[which(mcmc$mxy[[i]] %in% mcmc$m1y[[h]])] <- 1
-
-            # If xy in h: start freq is 1/2 (approximation; can try improving this)
-            start_freqs_xy[which(mcmc$mxy[[i]] %in% mcmc$mxy[[h]])] <- 1/2
-
-            # Proportion of exponential growth phase completed
-            prop_exp_complete <- (t_1st_trans - mcmc$seq[[h]][1]) / (t_g - mcmc$seq[[h]][1])
-
-            # Linearly interpolate frequencies
-            freq_xy_anc <- freq_xy_anc * prop_exp_complete + start_freqs_xy * (1 - prop_exp_complete)
-          }
-
-          # Frequency of shared iSNV in case i
-          freq_xy <- data$snvs[[i]]$isnv$af[match(mcmc$mxy[[i]], data$snvs[[i]]$isnv$call)]
-
-
-          out <- out +
-            # Likelihood from 0 < x < 1, 0 < y < 1
-            sum(log(
-              (evolveJC(1, mcmc$mu, delta_t_prime)*(1 - freq_xy_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*freq_xy_anc) * exp(log_p_isnv) * denovo_normed(freq_xy, mcmc$p, data$filters) * (1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_xy_anc)) +
-                (evolveJC(1, mcmc$mu, delta_t_prime)*freq_xy_anc + evolveJC(0, mcmc$mu, delta_t_prime)*(1 - freq_xy_anc)) * exp(log_p_isnv) * denovo_normed(1 - freq_xy, mcmc$p, data$filters) * (1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_xy_anc)) +
-                p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_xy_anc)
-            ))
-        }
-      }
-    }
+  if(length(trans_isnv_pos) > 0){
+    global_alone <- setdiff(1:length(trans_isnv_pos), c(global_in_local, global_same_site))
+  }else{
+    global_alone <- integer(0)
   }
 
-  if(h <= data$n_obs){
-    if(length(data$snvs[[h]]$isnv$call) > 0){
+  # Log likelihood contribution
+  out <- 0
 
-      # Frequency of iSNV in ancestor of case i
-      freq_x0_anc <- data$snvs[[h]]$isnv$af[match(mcmc$mx0[[i]], data$snvs[[h]]$isnv$call)]
-      freq_x1_anc <- data$snvs[[h]]$isnv$af[match(mcmc$mx1[[i]], data$snvs[[h]]$isnv$call)]
-
-      # If transmission occurred before end of exponential growth phase, need to back-mutate these frequencies.
-      if(t_1st_trans < t_g){
-        # To do this, we need to figure out what frequency they started at at t[h], on average
-        start_freqs_x0 <- rep(0, length(mcmc$mx0[[i]]))
-
-        # Which of mcmc$mx0 are 1y in h?
-        start_freqs_x0[which(mcmc$mx0[[i]] %in% mcmc$m1y[[h]])] <- 1
-
-        # If xy in h: start freq is 1/2 (approximation; can try improving this)
-        start_freqs_x0[which(mcmc$mx0[[i]] %in% mcmc$mxy[[h]])] <- 1/2
-
-        # Repeat for mcmc$mx1
-        start_freqs_x1 <- rep(0, length(mcmc$mx1[[i]]))
-
-        # Which of mcmc$mx0 are 1y in h?
-        start_freqs_x1[which(mcmc$mx1[[i]] %in% mcmc$m1y[[h]])] <- 1
-
-        # If xy in h: start freq is 1/2 (approximation; can try improving this)
-        start_freqs_x1[which(mcmc$mx1[[i]] %in% mcmc$mxy[[h]])] <- 1/2
-
-        # Proportion of exponential growth phase completed
-        prop_exp_complete <- (t_1st_trans - mcmc$seq[[h]][1]) / (t_g - mcmc$seq[[h]][1])
-
-        # Linearly interpolate frequencies
-        freq_x0_anc <- freq_x0_anc * prop_exp_complete + start_freqs_x0 * (1 - prop_exp_complete)
-        freq_x1_anc <- freq_x1_anc * prop_exp_complete + start_freqs_x1 * (1 - prop_exp_complete)
-
-        if(any(freq_x1_anc < 0) | any(freq_x0_anc < 0)){
-          print("warning2")
-          print(mcmc$seq[[i]])
-          print(t_1st_trans)
-          print(mcmc$seq[[h]][1])
-          print(freq_x0_anc)
-          print(freq_x1_anc)
-        }
-      }
+  # For iSNVs observed in i that aren't accounted for on the global phylogeny, compute marginal probability of the denovo frequency
+  out <- out + sum(dprop(freq[local_alone], mcmc$mu, log = T) + log(1/3)) # Choice of "to" nucleotide is 1/3
 
 
+  # For iSNVs observed in i where the global phylogeny has a different mutation at the same site, must have arisen before the one on the phylo tree)
+  out <- out + sum(dprop_bounded(freq[local_same_site], trans_isnv_size[global_same_site], mcmc$mu, log = T) + log(1/3)) # Choice of "to" nucleotide is 1/3
 
-      out <- out +
-        # Likelihood from 0 < x < 1, y = 0
-        length(mcmc$mx0[[i]]) * ifelse(isnv_info, log_p_no_isnv, 0) +
-        sum(log(
-          evolveJC(1, mcmc$mu, delta_t_prime)*(1 - freq_x0_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*freq_x0_anc
-        )) + sum(log(1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_x0_anc))) + # probability we don't transmit successive split bottlenecks
 
-        # Likelihood from 0 < x < 1, y = 1
-        length(mcmc$mx1[[i]]) * ifelse(isnv_info, log_p_no_isnv, 0) +
-        sum(log(
-          evolveJC(1, mcmc$mu, delta_t_prime)*(freq_x1_anc) + evolveJC(0, mcmc$mu, delta_t_prime)*(1 - freq_x1_anc)
-        )) + sum(log(1 - p_all_split(mcmc$b, (length(mcmc$seq[[i]]) - 1), freq_x1_anc))) # probability we don't transmit successive split bottlenecks
+  # For iSNVs observed in i that ARE accounted for on the global phylogeny, condition on when the first denovo SNV occurs (before/after the one on the phylo tree)
+  out <- out + sum(log(
+    dprop_bounded(freq[local_in_global], trans_isnv_size[global_in_local], mcmc$mu, log = F)/3 + # When there's an earlier emergence of this iSNV
+      dbeta(freq[local_in_global], 1, trans_isnv_size[global_in_local]) * pgeom(trans_isnv_size[global_in_local] - 1, mcmc$mu, lower.tail = F) # When there's not
+  ))
 
-    }
-  }
+
+  # For iSNVs UNobserved in i that ARE accounted for on the global phylogeny, again condition on when the first denovo SNV occurs
+  #print(global_alone)
+  out <- out + sum(log(
+    pprop_bounded(data$filters$af, trans_isnv_size[global_alone], mcmc$mu, log = F) + # When there's an earlier emergence of this iSNV
+      pbeta(data$filters$af, 1, trans_isnv_size[global_alone]) * pgeom(trans_isnv_size[global_alone] - 1, mcmc$mu, lower.tail = F) # When there's not
+  ))
+  #print(out)
+
+  # And finally, all other sites
+  # Use inclusion/exclusion to get the number of other sites
+  out <- out + (data$n_bases - length(unique(c(isnv_pos, trans_isnv_pos)))) * pprop(data$filters$af, mcmc$mu, log = T)
 
   return(out)
-
 }
-
-
-
-
-
-# g_lik <- function(mcmc, data, i){
-#
-#   if(mcmc$v < 0 | mcmc$mu < 0 | mcmc$p < 0 | mcmc$b < 0 | mcmc$lambda < 0 | mcmc$b > 1 | (length(mcmc$seq[[i]]) - 1) < 0){
-#     return(-Inf)
-#   }else{
-#
-#     # Ancestor of host i
-#     h <- mcmc$h[i]
-#
-#     # Time of end of exponential growth phase in h
-#     t_g <- mcmc$seq[[h]][1] + log(1/sqrt(mcmc$p)) / (mcmc$mu / mcmc$p) / log(mcmc$v)
-#
-#     # Evolutionary time intervals for each transmission on the chain from h to i, bottleneck to bottleneck
-#     # Doesn't include h -> last element of seq[[i]]
-#     # Oldest to newest, hence rev()
-#     deltas <- diff(rev(mcmc$seq[[i]]))
-#     t_1st_trans <- mcmc$seq[[i]][length(mcmc$seq[[i]])]
-#
-#     if(t_1st_trans < mcmc$seq[[h]][1]){
-#       stop("BOO!")
-#     }
-#
-#     # if(t_1st_trans < mcmc$seq[[h]][1]){
-#     #   return(-Inf)
-#     # }
-#
-#     delta_init <- t_1st_trans - t_g # Initial end of expo phase to first bottleneck; may be negative
-#
-#     # probability of SPECIFIC iSNV in expo growth phase
-#     p_new_isnv <- (1 - (1 - mcmc$p)^(1/sqrt(mcmc$p))) / 3
-#     log_p_new_isnv <- log(p_new_isnv)
-#
-#     # log probability of no iSNV in expo growth phase
-#     log_p_no_isnv <- (1/sqrt(mcmc$p)) * log(
-#       (1 - mcmc$p)
-#     )
-#
-#     # Number of snvs we're tracking (i.e. observed in the whole outbreak) without a mutation
-#     n_no_mut <- length(data$all_snv) -
-#       length(mcmc$m01[[i]]) -
-#       length(mcmc$m10[[i]]) -
-#       length(mcmc$m0y[[i]]) -
-#       length(mcmc$m1y[[i]]) -
-#       length(mcmc$mx0[[i]]) -
-#       length(mcmc$mx1[[i]]) -
-#       length(mcmc$mxy[[i]])
-#
-#     # Number of sites that never mutate across the entire outbreak
-#     n_never_mutate <- data$n_bases - length(data$all_snv)
-#
-#     # Bottleneck infecting first host on the chain. Format: (P(absent), P(iSNV), P(present))
-#     # Since it's unclear whether we're going 0 to 0 or 1 to 1 for the non-mutant sites, assume 0 -> 0
-#
-#     # bot_absent is the probability of each bottleneck infecting i, starting with the SNV absent in h
-#     # bot_present is the probability of each bottleneck infecting i, starting with the SNV present in h
-#     bot_absent <- c(1, 0, 0)
-#     bot_present <- c(0, 0, 1)
-#     # Evolve over first bottleneck
-#     if(delta_init > 0){
-#       bot_absent <- evolve_bot(bot_absent, mcmc$mu, mcmc$b, delta_init)
-#       bot_present <- evolve_bot(bot_present, mcmc$mu, mcmc$b, delta_init)
-#     }
-#     # Evolve over remaining bottlenecks
-#     bot_absent <- evolve_bot_repeatedly(bot_absent, mcmc$mu, mcmc$b, deltas)
-#     bot_present <- evolve_bot_repeatedly(bot_present, mcmc$mu, mcmc$b, deltas)
-#
-#     out <- 0
-#
-#     # For sites that never mutate across the entire dataset: approximate by JC probability of no mutations, times probability of no observed iSNV
-#     # Probability of observing no iSNV
-#
-#     ## COME BACK for what to do about missing sites...
-#
-#     if(n_never_mutate > 0){
-#       if(i <= data$n_obs){
-#         if(data$vcf_present[i]){
-#           upper <- data$filters$af
-#         }else{
-#           upper <- 1/2
-#         }
-#         log_p_obs_no_isnv <- log((1 - mcmc$p)^(1/sqrt(mcmc$p)) + (1 - (1 - mcmc$p)^(1/sqrt(mcmc$p))) * denovo_cdf(upper, mcmc$p))
-#
-#         out <- out + n_never_mutate * (log(evolveJC(1, mcmc$mu, mcmc$seq[[i]][1] - mcmc$seq[[h]][1])) + log_p_obs_no_isnv)
-#
-#       }else{
-#         out <- out + n_never_mutate * log(evolveJC(1, mcmc$mu, mcmc$seq[[i]][1] - mcmc$seq[[h]][1]))
-#       }
-#     }
-#
-#     # Likelihood from x = 0, y = 0 or x = 1, y = 1
-#     if(n_no_mut > 0){
-#       out <- out + n_no_mut * (log(bot_absent[1]) + log_p_no_isnv)
-#     }
-#
-#     # Likelihood from x = 0, y = 1
-#     if(length(mcmc$m01[[i]]) > 0){
-#       out <- out + length(mcmc$m01[[i]]) * (log(bot_absent[3]) + log_p_no_isnv)
-#     }
-#
-#     # Likelihood from x = 1, y = 0
-#     if(length(mcmc$m10[[i]]) > 0){
-#       out <- out + length(mcmc$m10[[i]]) * (log(bot_present[1]) + log_p_no_isnv)
-#     }
-#
-#     # Frequencies of added iSNVs
-#     freq_0y <- mcmc$isnv$af[[i]][match(mcmc$m0y[[i]], mcmc$isnv$call[[i]])]
-#
-#     # Frequency of shared iSNV in case i
-#     freq_xy <- mcmc$isnv$af[[i]][match(mcmc$mxy[[i]], mcmc$isnv$call[[i]])]
-#
-#     # Frequencies of deleted iSNVs
-#     freq_1y <- mcmc$isnv$af[[i]][match(mcmc$m1y[[i]], mcmc$isnv$call[[i]])]
-#
-#     out <- out +
-#       # Likelihood from x = 0, 0 < y < 1
-#       sum(
-#         log(
-#           bot_absent[1] * p_new_isnv * denovo(freq_0y, mcmc$p) +
-#             bot_absent[2] +
-#             bot_absent[3] * p_new_isnv * denovo(1 - freq_0y, mcmc$p)
-#         )
-#       ) +
-#
-#       # Likelihood from x = 1, 0 < y < 1
-#       sum(
-#         log(
-#           bot_present[1] * p_new_isnv * denovo(freq_1y, mcmc$p) +
-#             bot_present[2] +
-#             bot_present[3] * p_new_isnv * denovo(1 - freq_1y, mcmc$p)
-#         )
-#       )
-#
-#     # Frequency of iSNV in ancestor of case i
-#     freq_x0_anc <- mcmc$isnv$af[[h]][match(mcmc$mx0[[i]], mcmc$isnv$call[[h]])]
-#     freq_xy_anc <- mcmc$isnv$af[[h]][match(mcmc$mxy[[i]], mcmc$isnv$call[[h]])]
-#     freq_x1_anc <- mcmc$isnv$af[[h]][match(mcmc$mx1[[i]], mcmc$isnv$call[[h]])]
-#
-#     #print(freq_x1_anc)
-#     #print(t_1st_trans)
-#     #print(mcmc$seq[[h]][1])
-#
-#     # If transmission occurred before end of exponential growth phase, need to back-mutate these frequencies.
-#     if(delta_init < 0){
-#       # To do this, we need to figure out what frequency they started at at t[h], on average
-#       start_freqs_x0 <- rep(0, length(mcmc$mx0[[i]]))
-#
-#       # Which of mcmc$mx0 are 1y in h?
-#       start_freqs_x0[which(mcmc$mx0[[i]] %in% mcmc$m1y[[h]])] <- 1
-#
-#       # If xy in h: start freq is 1/2 (approximation; can try improving this)
-#       start_freqs_x0[which(mcmc$mx0[[i]] %in% mcmc$mxy[[h]])] <- 1/2
-#
-#
-#       # Repeat for mcmc$mxy
-#       start_freqs_xy <- rep(0, length(mcmc$mxy[[i]]))
-#
-#       # Which of mcmc$mx0 are 1y in h?
-#       start_freqs_xy[which(mcmc$mxy[[i]] %in% mcmc$m1y[[h]])] <- 1
-#
-#       # If xy in h: start freq is 1/2 (approximation; can try improving this)
-#       start_freqs_xy[which(mcmc$mxy[[i]] %in% mcmc$mxy[[h]])] <- 1/2
-#
-#
-#       # Repeat for mcmc$mx1
-#       start_freqs_x1 <- rep(0, length(mcmc$mx1[[i]]))
-#
-#       # Which of mcmc$mx0 are 1y in h?
-#       start_freqs_x1[which(mcmc$mx1[[i]] %in% mcmc$m1y[[h]])] <- 1
-#
-#       # If xy in h: start freq is 1/2 (approximation; can try improving this)
-#       start_freqs_x1[which(mcmc$mx1[[i]] %in% mcmc$mxy[[h]])] <- 1/2
-#
-#       # Proportion of exponential growth phase completed
-#       prop_exp_complete <- (t_1st_trans - mcmc$seq[[h]][1]) / (t_g - mcmc$seq[[h]][1])
-#
-#       # Linearly interpolate frequencies
-#       freq_x0_anc <- freq_x0_anc * prop_exp_complete + start_freqs_x0 * (1 - prop_exp_complete)
-#       freq_xy_anc <- freq_xy_anc * prop_exp_complete + start_freqs_xy * (1 - prop_exp_complete)
-#       freq_x1_anc <- freq_x1_anc * prop_exp_complete + start_freqs_x1 * (1 - prop_exp_complete)
-#     }
-#
-#     # Bottlenecks for each of the three cases
-#     bot_x0 <- mapply(init_bot, 1 - freq_x0_anc, freq_x0_anc, MoreArgs = list(mu = mcmc$mu, b = mcmc$b, delta_t = delta_init), SIMPLIFY = F)
-#     bot_xy <- mapply(init_bot, 1 - freq_xy_anc, freq_xy_anc, MoreArgs = list(mu = mcmc$mu, b = mcmc$b, delta_t = delta_init), SIMPLIFY = F)
-#     bot_x1 <- mapply(init_bot, 1 - freq_x1_anc, freq_x1_anc, MoreArgs = list(mu = mcmc$mu, b = mcmc$b, delta_t = delta_init), SIMPLIFY = F)
-#
-#     bot_x0 <- lapply(bot_x0, evolve_bot_repeatedly, mu = mcmc$mu, b = mcmc$b, deltas = deltas)
-#     bot_xy <- lapply(bot_xy, evolve_bot_repeatedly, mu = mcmc$mu, b = mcmc$b, deltas = deltas)
-#     bot_x1 <- lapply(bot_x1, evolve_bot_repeatedly, mu = mcmc$mu, b = mcmc$b, deltas = deltas)
-#
-#     # Log probabilities for each observation in each case
-#     p_x0 <- unlist(lapply(bot_x0, log_p_given_bot, freq = 0, p = mcmc$p, p_new_isnv = p_new_isnv, log_p_no_isnv = log_p_no_isnv))
-#     p_xy <- unlist(mapply(log_p_given_bot, bot_xy, freq_xy, MoreArgs = list(p = mcmc$p, p_new_isnv = p_new_isnv, log_p_no_isnv = log_p_no_isnv), SIMPLIFY = F))
-#     p_x1 <- unlist(lapply(bot_x1, log_p_given_bot, freq = 1, p = mcmc$p, p_new_isnv = p_new_isnv, log_p_no_isnv = log_p_no_isnv))
-#
-#     out <- out + sum(p_x0) + sum(p_xy) + sum(p_x1)
-#
-#     return(out)
-#
-#   }
-# }
-
-
-
-
-
-
-
-
-

@@ -37,10 +37,25 @@ local_mcmc <- function(mcmc, data){
 
 
 
-    #print(paste("move", r))
 
-    # Move 11
-    mcmc <- move_seq(mcmc, data)
+    #Move 11
+    mcmc <- move_seq(mcmc, data, also_resample_tmu = F)
+
+    if(length(unlist(mcmc$tmu)) != length(unlist(mcmc$subs$from))){
+      print(r)
+      stop("Updated mutations wrong")
+    }
+
+    if(!all(mcmc$g_lik[2:mcmc$n] == sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+      print(which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+      print(r)
+      stop("Genomic likelihood error")
+    }
+
+    mcmc <- move_seq(mcmc, data, also_resample_tmu = T)
+
+
+
 
     # Move 12
 
@@ -49,6 +64,8 @@ local_mcmc <- function(mcmc, data){
 
     mcmc <- move_w_t(mcmc, data, recursive = T)
 
+
+
     if(runif(1) < 1/2){
       # Move 14
       mcmc <- move_h_step(mcmc, data)
@@ -56,6 +73,7 @@ local_mcmc <- function(mcmc, data){
       # Move 15
       mcmc <- move_h_step(mcmc, data, upstream = F)
     }
+
 
 
     # Move 20
@@ -79,9 +97,12 @@ local_mcmc <- function(mcmc, data){
       mcmc <- move_delete(mcmc, data)
     }
 
+
+
     if(runif(1) < 1/2){
       # Move 26
       mcmc <- move_create(mcmc, data, upstream = F)
+
     }else{
       # Move 27
       mcmc <- move_delete(mcmc, data, upstream = F)
@@ -177,13 +198,10 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       mcmc$n <- data$n_obs + displacement
       mcmc$h <- mcmc$h[1:mcmc$n]
       mcmc$seq <- mcmc$seq[1:mcmc$n]
-      mcmc$m01 <- mcmc$m01[1:mcmc$n]
-      mcmc$m10 <- mcmc$m10[1:mcmc$n]
-      mcmc$m0y <- mcmc$m0y[1:mcmc$n]
-      mcmc$m1y <- mcmc$m1y[1:mcmc$n]
-      mcmc$mx0 <- mcmc$mx0[1:mcmc$n]
-      mcmc$mx1 <- mcmc$mx1[1:mcmc$n]
-      mcmc$mxy <- mcmc$mxy[1:mcmc$n]
+      mcmc$subs$from <- mcmc$subs$from[1:mcmc$n]
+      mcmc$subs$pos <- mcmc$subs$pos[1:mcmc$n]
+      mcmc$subs$to <- mcmc$subs$to[1:mcmc$n]
+      mcmc$tmu <- mcmc$tmu[1:mcmc$n]
       mcmc$g_lik <- mcmc$g_lik[1:mcmc$n]
       mcmc$root <- NULL
       mcmc$cluster <- NULL
@@ -200,13 +218,11 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
         unfrozen <- setdiff(1:all_res[[j]][[i]]$n, all_res[[j]][[i]]$external_roots)
 
         mcmc$seq[mappings[[j]]] <- all_res[[j]][[i]]$seq
-        mcmc$m01[mappings[[j]]] <- all_res[[j]][[i]]$m01
-        mcmc$m10[mappings[[j]]] <- all_res[[j]][[i]]$m10
-        mcmc$m0y[mappings[[j]]] <- all_res[[j]][[i]]$m0y
-        mcmc$m1y[mappings[[j]]] <- all_res[[j]][[i]]$m1y
-        mcmc$mx0[mappings[[j]]] <- all_res[[j]][[i]]$mx0
-        mcmc$mx1[mappings[[j]]] <- all_res[[j]][[i]]$mx1
-        mcmc$mxy[mappings[[j]]] <- all_res[[j]][[i]]$mxy
+        mcmc$subs[mappings[[j]]] <- all_res[[j]][[i]]$subs
+
+        mcmc$tmu[mappings[[j]]] <- all_res[[j]][[i]]$tmu
+        mcmc$bot[mappings[[j]]] <- all_res[[j]][[i]]$bot
+
         mcmc$g_lik[mappings[[j]]] <- all_res[[j]][[i]]$g_lik
 
         # For e_lik, compute as differences

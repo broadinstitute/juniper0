@@ -16,9 +16,8 @@ summarize <- function(results, burnin = 0.2){
   burnin <- n_reps * burnin + 1
 
   # Generations per transmission
-  bs <- c()
   mus <- c()
-  ps <- c()
+  N_effs <- c()
   pis <- c()
   Rs <- c()
 
@@ -26,9 +25,8 @@ summarize <- function(results, burnin = 0.2){
     tmrca <- c()
   }
   for (i in burnin:n_reps) {
-    bs <- c(bs, results[[2]][[i]]$b)
     mus <- c(mus, results[[2]][[i]]$mu)
-    ps <- c(ps, results[[2]][[i]]$p)
+    N_effs <- c(N_effs, results[[2]][[i]]$N_eff)
     pis <- c(pis, results[[2]][[i]]$pi)
     Rs <- c(Rs, results[[2]][[i]]$R)
 
@@ -79,8 +77,7 @@ summarize <- function(results, burnin = 0.2){
     direct_transmissions = direct,
     indirect_transmissions = indirect,
     mu = mus,
-    p = ps,
-    b = bs,
+    N_effs = N_effs,
     pi = pis,
     R = Rs
   )
@@ -88,8 +85,7 @@ summarize <- function(results, burnin = 0.2){
   # Visualization
   plot(out$log_likelihood, type = "l", main = "Log-Likelihood", xlab = "Iteration", ylab = "Log-Likelihood")
   hist(out$mu, xlab = "Value", main = "Evolution Rate (subs/site/day)")
-  hist(out$p, xlab = "Value", main = "Mutation Rate (subs/site/cycle)")
-  hist(1 + out$b, xlab = "Value", main = "Mean Transmission Bottleneck Size")
+  hist(out$N_eff, xlab = "Value", main = "Effective Sample Size")
   hist(out$pi, xlab = "Value", main = "Sampling Rate")
   hist(out$R, xlab = "Value", main = "Reproductive Number")
 

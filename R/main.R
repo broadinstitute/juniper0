@@ -91,22 +91,49 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
     liks <- c(liks, mcmc$e_lik + sum(mcmc$g_lik[2:mcmc$n]) + mcmc$prior)
 
-
     if(noisy){
       message(paste(r, "global iterations complete. Log-likelihood =", round(liks[r], 2)))
       print(plot_network(list(mcmc, data)))
       #print(mcmc$w)
        print(
          paste0(
-           "Mutation rate: ",
+           "Evolution rate: ",
            signif(mcmc$mu, digits = 4),
-           " substitutions/site/day, ",
-           signif(mcmc$p, digits = 4),
-           " mutations/site/cycle"
+           " substitutions/site/day"
          )
        )
-       #print(mcmc$pi)
-       #print(mcmc$R)
+       print(
+         paste0(
+           "Within-host effective population size: exp(",
+           signif(mcmc$N_eff, digits = 4),
+           " * t) virions after t days"
+         )
+       )
+       print(
+         paste0(
+           "Sampling rate: ",
+           signif(mcmc$pi, digits = 4)
+         )
+       )
+       print(
+         paste0(
+           "Reproductive number: ",
+           signif(mcmc$R, digits = 4)
+         )
+       )
+       print(
+         paste0(
+           "Number of included hosts: ",
+           length(unlist(mcmc$seq))
+         )
+       )
+       print(
+         paste0(
+           "Total number of mutations: ",
+           length(unlist(mcmc$tmu))
+         )
+       )
+
     }
 
     if(logging){
@@ -126,24 +153,8 @@ run_mcmc <- function(init, noisy = F, logging = F){
         file = "log.csv"
       )
     }
-
-    #print(mcmc$pi)
-    # print(all(sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data) == mcmc$g_lik[2:mcmc$n]))
-    #
-    # print(sum(sapply(2:data$n_obs, cc_from_root, mcmc=mcmc)))
-    #
-    #print(mcmc$R)
-    #
-    # print(length(unlist(mcmc$seq)))
-    # print(mcmc$b)
-    #print(mean(data$s[2:data$n_obs] - sapply(mcmc$seq[2:data$n_obs], function(v){v[1]})))
-    #print(length(unlist(mcmc$seq)))
-
-
   }
   return(list(
     liks, output, data$names, data$rooted
   ))
 }
-
-
