@@ -154,8 +154,7 @@ run_mcmc <- function(init, noisy = F, logging = F){
       )
     }
   }
-  ## Experimenting, delete this later
-  return(mcmc)
+
 
   return(list(
     liks, output, data$names, data$rooted
