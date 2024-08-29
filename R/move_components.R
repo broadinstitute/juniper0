@@ -160,7 +160,7 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
     # Population size is 1/freqs
     # At time t past inoculation, the population size is exp(N_e * t)
     # Hence t = log(1 / freq) / N_e
-    t_emerge <- log(1 / freq) / mcmc$N_eff
+    t_emerge <- log(1 / freqs) / mcmc$N_eff
 
     # What is the time to emergence as a fraction of the total time interval?
     frac_emerge <- t_emerge / (max_t - min_t)

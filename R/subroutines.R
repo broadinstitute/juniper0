@@ -83,11 +83,11 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
     af <- af[keep]
 
     # 1st allele, alphabetically
-    out$isnv$a1 <- c()
+    out$isnv$a1 <- character(0)
     # 2nd allele, alphabetically
-    out$isnv$a2 <- c()
+    out$isnv$a2 <- character(0)
     # Mutated proportion of first allele
-    out$isnv$af1 <- c()
+    out$isnv$af1 <- numeric(0)
     # Position
     out$isnv$pos <- integer(0)
 

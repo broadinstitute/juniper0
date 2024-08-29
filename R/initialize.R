@@ -157,7 +157,8 @@ initialize <- function(
       if(sum(included) >= 2){
         stop(paste("Multiple VCF files found for sequence", names[i]))
       }else if(sum(included) == 1){
-        vcf <- read.table(paste0("./", indir, "/vcf/", vcfs[included]))
+        vcf <- read.delim(paste0("./", indir, "/vcf/", vcfs[included]))
+        colnames(vcf) <- paste0("V", 1:ncol(vcf))
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
         vcf_present[i] <- TRUE
       }else{
@@ -173,7 +174,8 @@ initialize <- function(
       # Locate the correct vcf file
       who <- which(vcfs_prefix == names[i])
       if(length(who) == 1){
-        vcf <- read.table(paste0("./", indir, "/vcf/", vcfs[who]))
+        vcf <- read.delim(paste0("./", indir, "/vcf/", vcfs[who]))
+        colnames(vcf) <- paste0("V", 1:ncol(vcf))
         snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
         vcf_present[i] <- TRUE
       }else{
@@ -184,7 +186,6 @@ initialize <- function(
     }
   }
   close(pb)
-
 
 
   # Compile vectors of all positions with SNVs (may have duplicates) and all SNVs (unique)
