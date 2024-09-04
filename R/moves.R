@@ -767,7 +767,7 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
         # Probability that we stop moving j when we reach its current ancestor
         # See below comment on this probability
         n_kids <- length(setdiff(which(prop$h == prop$h[j]), c(i, js)))
-        hastings <- hastings + log(1 / (n_kids + 1))
+        hastings <- hastings + log(1 / (n_kids + 1)) # Probability we stop moving here on the way back up
 
         while(prop$h[j] != h){
           prop <- shift(prop, data, j, prop$h[j], prop$h[prop$h[j]], F)
@@ -994,7 +994,6 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
           done <- TRUE
         }else{
           # Otherwise, pick a kid to move onto
-          kids <- setdiff(which(prop$h == prop$h[j]), js)
           hastings <- hastings - log(1 / (length(kids) + 1))
           if(length(kids) == 1){
             kid <- kids

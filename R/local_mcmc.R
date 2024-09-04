@@ -75,7 +75,6 @@ local_mcmc <- function(mcmc, data){
     }
 
 
-
     # Move 20
     mcmc <- move_h_global(mcmc, data)
     mcmc <- move_h_global(mcmc, data, biassed = F)

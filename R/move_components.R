@@ -41,6 +41,10 @@ resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all", also_re
   # Min time of infection of i
   min_t <- mcmc$seq[[h]][1]
 
+  if(min_t >= max_t & output == "all"){
+    stop("time interval problem in seq")
+  }
+
   # w, w_old, w_new always represent the number of hosts BETWEEN min_t and max_t, i.e. the ones whose times we resample, not including hosts at min_t or max_t
   # hence when fix_latest_host = TRUE, it's one less than the length of seq; otherwise length of seq
 
@@ -103,6 +107,11 @@ resample_seq <- function(mcmc, data, i, fix_latest_host, output = "all", also_re
 
 # Resample times of mutations leading into i
 resample_tmu <- function(mcmc, data, i, output = "all"){
+
+  if(i == 1){
+    stop("Called resample_tmu on host 1")
+  }
+
   max_t <- mcmc$seq[[i]][1]
 
   h <- mcmc$h[[i]]
@@ -172,7 +181,6 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
     undetected <- setdiff(1:n_mut, detected)
   }
 
-  ### TRYING SIMPLER VERISION: uniform draws
   if(n_mut != length(mcmc$tmu[[i]]) | max_t <= min_t){
     log_p_new_old <- -Inf
   }else{
@@ -188,10 +196,15 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
     }
   }
 
+  if(output == "log_p_new_old"){
+    return(log_p_new_old)
+  }
+
   ## Now, for the resampling of tmu
 
   if(isnv_info){
     mcmc$tmu[[i]] <- runif(n_mut, min_t, max_t)
+
     mcmc$tmu[[i]][detected] <- rbeta1_rescaled(length(detected), frac_emerge, min_t, max_t)
 
     log_p_old_new <-
@@ -203,49 +216,73 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
     log_p_old_new <- n_mut * log(1 / (max_t - min_t))
   }
 
-  if(output == "log_p_new_old"){
-    return(log_p_new_old)
-  }else{
+
     return(list(
       mcmc,
       log_p_new_old,
       log_p_old_new
     ))
-  }
+
 
 }
 
 ## Resample the genotype for an unobserved host, or for an observed host with missing sites, based on (approximate) parsimony
+# If upstream_only = TRUE, the genotype is only based on upstream nodes (children of i)
 genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
+
+  upstream_only <- (i == 1)
 
   js <- which(mcmc$h == i)
 
   # Positions on the genome where we may need to make a change to get parsimony
-  pos <- c(
-    mcmc$subs$pos[[i]],
-    unlist(mcmc$subs$pos[js])
-  )
-  # The allele in i at these positions
-  current <- c(
-    mcmc$subs$to[[i]],
-    unlist(mcmc$subs$from[js])
-  )
-  # The allele in neighbors at these positions
-  neighbor <- c(
-    mcmc$subs$from[[i]],
-    unlist(mcmc$subs$to[js])
-  )
+  if(upstream_only){
+    pos <- unlist(mcmc$subs$pos[js])
+
+    # The allele in i at these positions
+    current <- unlist(mcmc$subs$from[js])
+
+    # The allele in neighbors at these positions
+    neighbor <- unlist(mcmc$subs$to[js])
+
+  }else{
+    pos <- c(
+      mcmc$subs$pos[[i]],
+      unlist(mcmc$subs$pos[js])
+    )
+    # The allele in i at these positions
+    current <- c(
+      mcmc$subs$to[[i]],
+      unlist(mcmc$subs$from[js])
+    )
+    # The allele in neighbors at these positions
+    neighbor <- c(
+      mcmc$subs$from[[i]],
+      unlist(mcmc$subs$to[js])
+    )
+  }
+
+
 
   # If i is observed, the only positions that can change are those with missing data or iSNVs
   if(i <= data$n_obs){
-    keep <- pos %in% data$pos[[i]]$missing | pos %in% data$pos[[i]]$isnv$pos
+    keep <- which(pos %in% data$pos[[i]]$missing | pos %in% data$pos[[i]]$isnv$pos)
     pos <- pos[keep]
     current <- current[keep]
     neighbor <- neighbor[keep]
   }
 
+  if(i == 1){
+    if(length(keep) > 0){
+      stop("Trying to update genotye at i, which shouldn't be possible")
+    }
+  }
+
   # Number of neighbors (h[i] and js)
-  n_neighbors <- 1 + length(js)
+  if(upstream_only){
+    n_neighbors <- length(js)
+  }else{
+    n_neighbors <- 1 + length(js)
+  }
 
   ## Loop over snvs
   log_p_new_old <- 0
@@ -254,8 +291,14 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
   # First get probabilities of tmu for old state
   # Unnecessary if this function is just to check parsimony
   if(!check_parsimony){
-    for (j in c(i, js)) {
-      log_p_new_old <- log_p_new_old + resample_tmu(mcmc, data, j, output = "log_p_new_old")
+    if(upstream_only){
+      for (j in js) {
+        log_p_new_old <- log_p_new_old + resample_tmu(mcmc, data, j, output = "log_p_new_old")
+      }
+    }else{
+      for (j in c(i, js)) {
+        log_p_new_old <- log_p_new_old + resample_tmu(mcmc, data, j, output = "log_p_new_old")
+      }
     }
   }
 
@@ -389,12 +432,23 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
   }else{
 
     # Update tmu
-    for (j in c(i, js)) {
-      # Resample tmu
-      mcmc <- resample_tmu(mcmc, data, j)
-      log_p_old_new <- log_p_old_new + mcmc[[3]]
-      mcmc <- mcmc[[1]]
+    if(upstream_only){
+      for (j in js) {
+        # Resample tmu
+        mcmc <- resample_tmu(mcmc, data, j)
+        log_p_old_new <- log_p_old_new + mcmc[[3]]
+        mcmc <- mcmc[[1]]
+      }
+    }else{
+      for (j in c(i, js)) {
+        # Resample tmu
+        mcmc <- resample_tmu(mcmc, data, j)
+        log_p_old_new <- log_p_old_new + mcmc[[3]]
+        mcmc <- mcmc[[1]]
+      }
     }
+
+
 
     return(list(
       mcmc,

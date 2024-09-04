@@ -133,7 +133,6 @@ run_mcmc <- function(init, noisy = F, logging = F){
            length(unlist(mcmc$tmu))
          )
        )
-
     }
 
     if(logging){

@@ -17,7 +17,6 @@
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
 #' @param a_s Shape parameter, sojourn interval. Defaults to 5.
 #' @param lambda_s Rate parameter, sojourn interval. Defaults to 1.
-#' @param R Reproductive number (average over entire outbreak). Defaults to 2.
 #' @param psi Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
 #' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.
@@ -42,7 +41,6 @@ initialize <- function(
     lambda_g = 1, # Rate parameter, generation interval
     a_s = 5, # Shape parameter, sojourn interval
     lambda_s = 1, # Rate parameter, sojourn interval
-    R = 2, # Reproductive number (average over entire outbreak)
     psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
     init_mu = 2e-5,
     fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
@@ -66,7 +64,6 @@ initialize <- function(
   # lambda_g = 1 # Rate parameter, generation interval
   # a_s = 5 # Shape parameter, sojourn interval
   # lambda_s = 1 # Rate parameter, sojourn interval
-  # R = 2 # Reproductive number (average over entire outbreak)
   # psi = 0.5 # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
   # init_mu = 2e-5
   # fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
@@ -146,6 +143,11 @@ initialize <- function(
     s <- date[,2][match(names, date[,1])]
   }
 
+  # Shift all dates such that the last date of sample collection is always 0
+  max_collection_time <- max(s, na.rm = T)
+  s <- s - max(s, na.rm = T)
+
+
 
   ## List of SNVs present per sample
   message("Processing FASTA and VCF files...")
@@ -216,7 +218,6 @@ initialize <- function(
 
   data <- list()
   data$s <- s
-  data$t_max <- max(data$s, na.rm = T)
   data$N <- N #population size
   data$n_obs <- n # number of observed hosts, plus 1 (index case)
   data$n_bases <- n_bases
@@ -303,13 +304,18 @@ initialize <- function(
   mcmc$lambda_s <- lambda_s # rate parameter of the sojourn interval. FOR NOW: fixing at 1.
   mcmc$mu <- init_mu
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
-  mcmc$R <- R
-  mcmc$pi <- 0.2 # Probability of sampling
+
+  # Optimize R and pi
+  vals <- opt_R_pi(data$s + max_collection_time, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
+  print(vals)
+
+  mcmc$R <- vals[1] # Reproductive number
+  mcmc$pi <- vals[2] # Probability of sampling
   mcmc$N_eff <- N_eff
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
   mcmc$seq <- list()
-  mcmc$seq[[1]] <- 0
+  mcmc$seq[[1]] <- -max_collection_time
   mcmc$seq[2:n] <- lapply(2:n, get_ts, mcmc = mcmc, data = data)
 
   # Times at which mutations occur
@@ -318,10 +324,14 @@ initialize <- function(
   for (i in 1:n) {
     n_subs <- length(mcmc$subs$from[[i]])
     if(n_subs > 0){
-      mcmc$tmu[[i]] <- runif(n_subs, 0, mcmc$seq[[i]][1])
+      mcmc$tmu[[i]] <- runif(n_subs, -max_collection_time, mcmc$seq[[i]][1])
     }else{
       mcmc$tmu[[i]] <- numeric(0)
     }
+  }
+
+  for (i in 1:n) {
+    data$snvs[[i]]$snv <- NULL
   }
 
   # Also track the epidemiological and genomic likelihoods, and prior

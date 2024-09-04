@@ -1573,3 +1573,190 @@
 # #   log_p_new_old,
 # #   log_p_old_new
 # # ))
+
+# move_h_step <- function(mcmc, data, upstream = TRUE, update_genotype_at_i = T){
+#   # Choose random host with ancestor
+#   i <- sample(2:mcmc$n, 1)
+#
+#   # Children of i
+#   js <- which(mcmc$h == i)
+#
+#   if(i %in% mcmc$external_roots){
+#     fix_latest_host <- TRUE # If i is the root of a downstream cluster, can't resample time of infection of i
+#   }else{
+#     fix_latest_host <- FALSE
+#   }
+#
+#   # Previous ancestor of i
+#   h_old <- mcmc$h[i]
+#
+#   # Proposal
+#   prop <- mcmc
+#
+#   # Hastings ratio of this proposal
+#   hastings <- 0
+#
+#
+#   if(upstream){
+#
+#     if(update_genotype_at_i){
+#       # P(new to old): In the corresponding downstream move, we resample seq for i and the genotype at i (note these don't talk to each other)
+#       # Current config (old): h_old -> i, h_old -> h_new
+#       hastings <- hastings +
+#         resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE) +
+#         genotype(mcmc, data, i, output = "log_p_new_old")
+#
+#     }else{
+#       # P(new to old): In the corresponding downstream move, we resample seq for i and the genotype at h_old (note these don't talk to each other)
+#       # Current config (old): h_old -> i, h_old -> h_new
+#       hastings <- hastings +
+#         resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE) +
+#         genotype(mcmc, data, h_old, output = "log_p_new_old")
+#     }
+#
+#
+#
+#     # Who are the other children of h_old?
+#     children <- setdiff(which(mcmc$h == h_old), i)
+#     children <- setdiff(children, mcmc$external_roots)
+#
+#     if(length(children) == 0 | (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2)){
+#       return(mcmc)
+#     }
+#
+#     # Pick one
+#     h_new <- ifelse(length(children) == 1, children, sample(children, 1))
+#
+#     # If times incompatible, return mcmc
+#     if(fix_latest_host){
+#       if(mcmc$seq[[i]][1] <= mcmc$seq[[h_new]][1]){
+#         return(mcmc)
+#       }
+#     }else{
+#       if(get_max_t(mcmc, data, i) <= mcmc$seq[[h_new]][1]){
+#         return(mcmc)
+#       }
+#     }
+#
+#     # Update hastings ratio based on number of children to choose from. This is log P(old to new)
+#     hastings <- hastings - log(1 / length(children))
+#
+#     # Update ancestor and initialize genetics
+#     prop$h[i] <- h_new
+#     prop <- update_genetics(prop, i, h_new, upstream = T)
+#
+#     # We've now gotten to h_old -> h_new -> i
+#
+#     # Resample seq at i
+#     # If update_genotype isn't i, we also need to resample times of mutations at i
+#     prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = !update_genotype_at_i)
+#     hastings <- hastings - prop[[3]]
+#     prop <- prop[[1]]
+#
+#     if(update_genotype_at_i){
+#       # Resample genotype at i
+#       prop <- genotype(prop, data, i)
+#     }else{
+#       # Resample genotype at h_old
+#       prop <- genotype(prop, data, h_old)
+#     }
+#     hastings <- hastings - prop[[3]]
+#     prop <- prop[[1]]
+#
+#     # For upstream move: may need to update at ancestor of h_old
+#     update <- c(h_old, h_new, i)
+#     if(h_old != 1 & !update_genotype_at_i){
+#       update <- c(prop$h[h_old], update)
+#     }
+#
+#     if(update_genotype_at_i){
+#       to_check <- c(h_old, h_new, js)
+#     }else{
+#       # Check parsimony: by changing the genotype at h_old, we may affect parsimony at the neighbors of h_old. We've also moved i, so it may not be parsimonious.
+#       to_check <- c(which(prop$h == h_old), i)
+#       if(h_old != 1){
+#         to_check <- c(prop$h[h_old], to_check)
+#       }
+#     }
+#
+#
+#
+#   }else{
+#
+#     ## Downstream move
+#     if(
+#       # If no downstream move, reject
+#       # Also reject if h_old is not observed and has <= 2 total children, because then we can't remove one
+#       # Also reject if tree is unrooted and we're moving a new node onto the root
+#       h_old == 1 |
+#       (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2) |
+#       (!data$rooted & mcmc$h[h_old] == 1)
+#     ){
+#       return(mcmc)
+#     }
+#
+#     # New ancestor of i is ancestor's ancestor
+#     h_new <- mcmc$h[h_old]
+#
+#     if(update_genotype_at_i){
+#       # For P(new to old): resample seq at i, and genotype at i
+#       # Current (old) config: h_new -> h_old -> i
+#       hastings <- hastings +
+#         resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE) +
+#         genotype(mcmc, data, i, output = "log_p_new_old")
+#     }else{
+#       # For P(new to old): resample seq and tmu at i, and genotype at h_new
+#       # Current (old) config: h_new -> h_old -> i
+#       hastings <- hastings +
+#         resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = TRUE) +
+#         genotype(mcmc, data, h_new, output = "log_p_new_old")
+#     }
+#
+#
+#     # Update ancestor and initialize genetics
+#     prop$h[i] <- h_new
+#     prop <- update_genetics(prop, i, h_old, upstream =F)
+#
+#     # Now h_new -> h_old, h_new -> i
+#
+#     # Resample seq
+#     prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = F)
+#     hastings <- hastings - prop[[3]]
+#     prop <- prop[[1]]
+#
+#     # Resample genotype (which also resamples tmu for neighbors of h_new)
+#     if(update_genotype_at_i){
+#       prop <- genotype(prop, data, i)
+#     }else{
+#       prop <- genotype(prop, data, h_new)
+#     }
+#     hastings <- hastings - prop[[3]]
+#     prop <- prop[[1]]
+#
+#     # Who are the other children h_new? (For hastings ratio)
+#     children <- setdiff(which(prop$h == h_new), i)
+#     children <- setdiff(children, prop$external_roots)
+#
+#     # P(new -> old): choose correct child of h_new
+#     hastings <- hastings + log(1 / length(children))
+#
+#     # For downstream move: may need to update at ancestor of h_old
+#     update <- c(h_old, h_new, i)
+#     if(h_new != 1 & !update_genotype_at_i){
+#       update <- c(prop$h[h_new], update)
+#     }
+#
+#     if(update_genotype_at_i){
+#       to_check <- c(h_old, h_new, js)
+#     }else{
+#       # Check parsimony: by changing the genotype at h_new, we may affect parsimony at the neighbors of h_new, which include i.
+#       to_check <- which(prop$h == h_new)
+#       if(h_new != 1){
+#         to_check <- c(prop$h[h_new], to_check)
+#       }
+#     }
+#   }
+#
+#
+#   return(accept_or_reject(prop, mcmc, data, update, hastings = hastings, check_parsimony = to_check))
+# }

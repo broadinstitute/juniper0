@@ -54,7 +54,7 @@ e_lik <- function(mcmc, data){
 
     return(
       prob_JC + TransPhylo::probTTree(
-        ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, data$t_max, delta_t = 0.1
+        ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
       )
     )
 }

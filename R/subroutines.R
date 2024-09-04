@@ -219,6 +219,71 @@ tot_evo_time <- function(mcmc){
   sum(sapply(2:mcmc$n, evo_time, mcmc = mcmc))
 }
 
+## Get optimal values of R and pi, approximately
+
+# Objective function of R and pi
+obj <- function(params, t, a_g, lambda_g){
+
+  #print(params)
+  #print(optimize_tmrca)
+
+  R <- params[1]
+  pi <- params[2]
+
+  if(pi <= 0 | pi > 1 | R <= 0){
+    return(Inf)
+  }
+
+  max_t <- max(t)
+
+  # Generation interval
+  g <- a_g / lambda_g
+
+  # Number of generations
+  G <- max_t / g
+
+  # Get rid of last time to be infected, since we say the process stops there
+  t <- t[-which.max(t)]
+
+  if(length(t) > round((R^(G+1) - 1) / (R-1))){
+    return(Inf)
+  }
+
+  out <- dbinom(length(t), round((R^(G+1) - 1) / (R-1)), pi, log = T)
+
+  if(is.nan(out)){
+    print(params)
+  }
+
+  # Population growth curve is N(t) = exp(t*log(R))
+  # Normalizing by its integral to get a PDF, we have f(t) = (exp(t*log(R)) * log(R)) / (exp(max_t * log(R)) - 1)
+  # Taking the log...
+  #out <- 0
+  out <- out + sum(log(
+    R^(t/g) * log(R) / ((R^(max_t/g) - 1) * g)
+  ))
+
+  return(-out) # Because optimize function finds minimum
+}
+
+opt_R_pi <- function(s, a_g, lambda_g, a_s, lambda_s){
+
+  # Delete NAs
+  s <- s[!is.na(s)]
+
+  # Shift date of sample collection back by mean sojourn interval to get approximate time of infection
+  t <- s - (a_s / lambda_s)
+
+  init_vals <- c(2, 0.5)
+  vals <- optim(init_vals, obj, t = t, a_g = a_g, lambda_g = lambda_g)
+
+  return(vals$par)
+
+}
+
+
+
+
 # Probability density function for the waiting time to a denovo iSNV at a given site
 ddenovo <- function(x, mu, N_eff, log){
   if(log){
