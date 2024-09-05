@@ -11,7 +11,6 @@
 #' @param rooted If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.
 #' @param record Parameters to be recorded in the MCMC output.
 #' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
-#' @param check_names If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.
 #' @param indir Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs. Defaults to "input_data".
 #' @param a_g Shape parameter, generation interval. Defaults to 5.
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
@@ -34,7 +33,6 @@ initialize <- function(
     N = NA, # Population size
     record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"), # Which aspects of mcmc do we want to record
     filters = NULL,
-    check_names = TRUE, # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
     # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
     indir = "input_data", # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
     a_g = 5, # Shape parameter, generation interval
@@ -46,27 +44,6 @@ initialize <- function(
     fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
     N_eff = log(100) # Effective population size, within host
 ){
-
-  # n_subtrees = 1
-  # n_global = 100 # Number of global moves
-  # n_local = 100 # Number of local moves per global move
-  # sample_every = 100 # Per how many local moves do we draw one sample? Should be a divisor of n_local
-  # init_mst = FALSE # Should we initialize to a minimum spanning tree?
-  # init_ancestry = FALSE # Specify the starting ancestry
-  # rooted = TRUE # Is the root of the transmission network fixed at the ref sequence?
-  # N = NA # Population size
-  # record = c("n", "h", "seq", "N_eff", "mu", "pi", "R") # Which aspects of mcmc do we want to record
-  # filters = NULL
-  # check_names = FALSE # Should we check to make sure all of the names in the FASTA match the names of the VCFs and dates?
-  # # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
-  # indir = "input_data" # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
-  # a_g = 5 # Shape parameter, generation interval
-  # lambda_g = 1 # Rate parameter, generation interval
-  # a_s = 5 # Shape parameter, sojourn interval
-  # lambda_s = 1 # Rate parameter, sojourn interval
-  # psi = 0.5 # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
-  # init_mu = 2e-5
-  # fixed_mu = F # Should mutation rate be fixed? Defaults to FALSE.
 
   ## Filters
   if(is.null(filters)){
@@ -83,19 +60,54 @@ initialize <- function(
   }
 
 
-  ## Data Processing
+  ### Data Processing
 
-  # Load the reference sequence
-  ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
-
-  # Length of genome
-  n_bases <- length(ref_genome[[1]])
+  ## FASTAs and dates
 
   # Load the FASTA of sequences
   fasta <- ape::read.FASTA(paste0("./", indir, "/aligned.fasta"))
 
+  # Times of collection for the non-reference sequence
+  s_nonref <- as.Date(gsub(".*\\|", "", names(fasta)))
+
+  # If rooted, reference sequence is provided. Otherwise, initialized to earliest case in dataset.
+  # In the latter case, the genome will be updated regardless, so this initialization doesn't matter
+
+  if(rooted){
+    # Load the reference sequence
+    ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
+    s_ref <- as.Date(gsub(".*\\|", "", names(ref_genome)))
+  }else{
+    earliest <- which.min(s_nonref)
+    ref_genome <- fasta[earliest]
+    names(ref_genome) <- "ref_genome"
+
+    # Going to initialize time of collection to 10 days before earliest sequence collection
+    s_ref <- min(s_nonref) - 10
+  }
+
+  # Length of genome
+  n_bases <- length(ref_genome[[1]])
+
   # The first genome is itself the ref genome
   fasta <- c(ref_genome, fasta)
+  s <- c(as.Date(NA), s_nonref) # Ref genome always treated as unsampled
+
+  # The earliest case to be collected must be offset by 1, since we've appended the reference genome in front
+  if(!rooted){
+    earliest <- earliest + 1
+  }
+
+  # Shift all dates such that the last date of sample collection is always 0
+  s_max <- max(s, na.rm = T)
+  s <- as.numeric(difftime(s, s_max, units = 'days'))
+
+  # Time of most recent common ancestor, before s_max
+  tmrca <- as.numeric(difftime(s_ref, s_max, units = 'days'))
+
+
+
+
 
   # Number of samples
   n <- length(fasta)
@@ -115,37 +127,12 @@ initialize <- function(
   }
 
   # Names of sequences
-  names <- names(fasta)
+  names <- gsub("\\|.*", "", names(fasta))
 
   # VCF files present
   vcfs <- list.files(paste0("./", indir, "/vcf"))
 
-  # Date
-  date <- read.csv(paste0("./", indir, "/date.csv"))
 
-  if(check_names){
-    s <- c()
-    for (i in 1:n) {
-      # Check if we have a date for the sample
-      included <- names[i] == date[,1]
-      if(sum(included) >= 2){
-        stop(paste("Multiple sample collection dates found for sequence", names[i]))
-      }else if(sum(included) == 1){
-        s[i] <- date[,2][included]
-      }else{
-        s[i] <- NA
-        if(i > 1){
-          stop(paste("No sample collection date found for sequence", names[i]))
-        }
-      }
-    }
-  }else{
-    s <- date[,2][match(names, date[,1])]
-  }
-
-  # Shift all dates such that the last date of sample collection is always 0
-  max_collection_time <- max(s, na.rm = T)
-  s <- s - max(s, na.rm = T)
 
 
 
@@ -153,42 +140,27 @@ initialize <- function(
   message("Processing FASTA and VCF files...")
   snvs <- list()
   pb = txtProgressBar(min = 0, max = n, initial = 0)
-  if(check_names){
-    vcf_present <- c()
-    for (i in 1:n) {
-      # Check if we have a VCF file
-      included <- grepl(names[i], vcfs)
-      if(sum(included) >= 2){
-        stop(paste("Multiple VCF files found for sequence", names[i]))
-      }else if(sum(included) == 1){
-        vcf <- read.delim(paste0("./", indir, "/vcf/", vcfs[included]))
-        colnames(vcf) <- paste0("V", 1:ncol(vcf))
-        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
-        vcf_present[i] <- TRUE
-      }else{
-        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
-        vcf_present[i] <- FALSE
-      }
-      setTxtProgressBar(pb,i)
+
+  vcfs_prefix <- gsub(".vcf", "", vcfs)
+  vcf_present <- c()
+  for (i in 1:n) {
+    # Locate the correct vcf file
+    who <- which(vcfs_prefix == names[i])
+    if(length(who) == 1){
+      vcf <- read.delim(
+        paste0("./", indir, "/vcf/", vcfs[who]),
+        colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character")
+      )
+      colnames(vcf) <- paste0("V", 1:ncol(vcf))
+      snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+      vcf_present[i] <- TRUE
+    }else{
+      snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
+      vcf_present[i] <- FALSE
     }
-  }else{
-    vcfs_prefix <- gsub(".vcf", "", vcfs)
-    vcf_present <- c()
-    for (i in 1:n) {
-      # Locate the correct vcf file
-      who <- which(vcfs_prefix == names[i])
-      if(length(who) == 1){
-        vcf <- read.delim(paste0("./", indir, "/vcf/", vcfs[who]))
-        colnames(vcf) <- paste0("V", 1:ncol(vcf))
-        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
-        vcf_present[i] <- TRUE
-      }else{
-        snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
-        vcf_present[i] <- FALSE
-      }
-      setTxtProgressBar(pb,i)
-    }
+    setTxtProgressBar(pb,i)
   }
+
   close(pb)
 
 
@@ -306,8 +278,9 @@ initialize <- function(
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
 
   # Optimize R and pi
-  vals <- opt_R_pi(data$s + max_collection_time, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
-  print(vals)
+  #vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
+  #print(vals)
+  vals <- c(2, 0.5)
 
   mcmc$R <- vals[1] # Reproductive number
   mcmc$pi <- vals[2] # Probability of sampling
@@ -315,7 +288,7 @@ initialize <- function(
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
   mcmc$seq <- list()
-  mcmc$seq[[1]] <- -max_collection_time
+  mcmc$seq[[1]] <- tmrca
   mcmc$seq[2:n] <- lapply(2:n, get_ts, mcmc = mcmc, data = data)
 
   # Times at which mutations occur
@@ -324,7 +297,7 @@ initialize <- function(
   for (i in 1:n) {
     n_subs <- length(mcmc$subs$from[[i]])
     if(n_subs > 0){
-      mcmc$tmu[[i]] <- runif(n_subs, -max_collection_time, mcmc$seq[[i]][1])
+      mcmc$tmu[[i]] <- runif(n_subs, tmrca, mcmc$seq[[i]][1])
     }else{
       mcmc$tmu[[i]] <- numeric(0)
     }
@@ -334,10 +307,18 @@ initialize <- function(
     data$snvs[[i]]$snv <- NULL
   }
 
+  print(length(unlist(mcmc$subs$from)))
+
+  if(!data$rooted){
+    mcmc <- genotype(mcmc, data, 1)[[1]]
+  }
+
+  print(length(unlist(mcmc$subs$from)))
+
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes
   mcmc$e_lik <- e_lik(mcmc, data)
-  mcmc$g_lik <- c(NA, sapply(2:n, g_lik, mcmc = mcmc, data = data))
+  mcmc$g_lik <- sapply(1:n, g_lik, mcmc = mcmc, data = data)
   mcmc$prior <- prior(mcmc)
 
   return(list(mcmc, data))

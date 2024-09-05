@@ -103,6 +103,13 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
 
       # Which props are nonzero
       nonzero <- which(props > 0)
+
+      if(length(nonzero) < 2){
+        print(i)
+        print(vcf)
+        stop("???")
+      }
+
       out$isnv$a1 <- c(out$isnv$a1, c("A", "C", "G", "T")[nonzero[1]])
       out$isnv$a2 <- c(out$isnv$a2, c("A", "C", "G", "T")[nonzero[2]])
       out$isnv$af1 <- c(out$isnv$af1, props[nonzero[1]])

@@ -263,19 +263,19 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
 
 
 
-  # If i is observed, the only positions that can change are those with missing data or iSNVs
-  if(i <= data$n_obs){
+  # If i is observed, and isn't the root of an unrooted tree, the only positions that can change are those with missing data or iSNVs
+  if(i <= data$n_obs & !(i == 1 & !data$rooted)){
     keep <- which(pos %in% data$pos[[i]]$missing | pos %in% data$pos[[i]]$isnv$pos)
     pos <- pos[keep]
     current <- current[keep]
     neighbor <- neighbor[keep]
   }
 
-  if(i == 1){
-    if(length(keep) > 0){
-      stop("Trying to update genotye at i, which shouldn't be possible")
-    }
-  }
+  # if(i == 1){
+  #   if(length(keep) > 0){
+  #     stop("Trying to update genotye at i, which shouldn't be possible")
+  #   }
+  # }
 
   # Number of neighbors (h[i] and js)
   if(upstream_only){
@@ -325,8 +325,8 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
     # Parsimonious states are whichever counts equal the maximum of count
     parsimonious <- c("A", "C", "G", "T")[which(counts == max(counts))]
 
-    # If i observed and has iSNV, parsimonious state must be one of the observed iSNV states
-    if(i <= data$n_obs){
+    # If i observed and isn't the root of an unrooted tree and has iSNV, parsimonious state must be one of the observed iSNV states
+    if(i <= data$n_obs & !(i == 1 & !data$rooted)){
       if(p %in% data$snvs[[i]]$isnv$pos){
         # Index of iSNV in i
         ind_isnv <- match(p, data$pos[[i]]$isnv$pos)
@@ -345,11 +345,11 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
       }
     }
 
-    if(!check_parsimony & output == "log_p_new_old"){
-      if(!(letter_current %in% parsimonious)){
-        stop("The current state is not parsimonious")
-      }
-    }
+    # if(!check_parsimony & output == "log_p_new_old"){
+    #   if(!(letter_current %in% parsimonious)){
+    #     stop("The current state is not parsimonious")
+    #   }
+    # }
 
     # P(new to old): pick one of the (possibly several) parsimonious states
     log_p_new_old <- log_p_new_old + log(1 / length(parsimonious))
@@ -364,6 +364,7 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
       if(letter_current != letter_new){
         # Update subs[[i]]
         if(p %in% mcmc$subs$pos[[i]]){
+          # Always not this case when i == 1
           # What's the index of the substitution leading into i that has position "p"?
           ind <- match(p, mcmc$subs$pos[[i]])
           if(mcmc$subs$from[[i]][ind] == letter_new){
@@ -377,9 +378,11 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
           }
         }else{
           # If no mutation present, add it
-          mcmc$subs$from[[i]] <- c(mcmc$subs$from[[i]], letter_current)
-          mcmc$subs$pos[[i]] <- c(mcmc$subs$pos[[i]], p)
-          mcmc$subs$to[[i]] <- c(mcmc$subs$to[[i]], letter_new)
+          if(i != 1){
+            mcmc$subs$from[[i]] <- c(mcmc$subs$from[[i]], letter_current)
+            mcmc$subs$pos[[i]] <- c(mcmc$subs$pos[[i]], p)
+            mcmc$subs$to[[i]] <- c(mcmc$subs$to[[i]], letter_new)
+          }
         }
 
         # Update subs[[j]]
@@ -447,8 +450,6 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
         mcmc <- mcmc[[1]]
       }
     }
-
-
 
     return(list(
       mcmc,
