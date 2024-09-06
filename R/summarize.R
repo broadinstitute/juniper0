@@ -10,6 +10,7 @@ summarize <- function(results, burnin = 0.2){
   n_reps <- length(results[[1]])
   names <- results[[3]] # Sequence names
   rooted <- results[[4]] # Is the tree rooted?
+  s_max <- results[[5]]
   n_obs <- length(names) # Number of observed hosts
   indirect <- matrix(0, ncol = n_obs, nrow = n_obs)
   direct <- matrix(0, ncol = n_obs, nrow = n_obs)
@@ -35,7 +36,7 @@ summarize <- function(results, burnin = 0.2){
     w <- sapply(results[[2]][[i]]$seq, length) - 1
 
     if(!rooted){
-      tmrca <- c(tmrca, (results[[2]][[i]]$seq[[which(h == 1)]])[1])
+      tmrca <- c(tmrca, (results[[2]][[i]]$seq[[1]])[1])
     }
 
     # Most recent observed ancestor
@@ -90,6 +91,8 @@ summarize <- function(results, burnin = 0.2){
   hist(out$R, xlab = "Value", main = "Reproductive Number")
 
   if(!rooted){
+    tmrca <- s_max + tmrca
+    hist(tmrca, xlab = "Date", main = "Epidemic Start Date", breaks = "days")
     out <- c(out, list(time_of_MRCA = tmrca))
   }
 

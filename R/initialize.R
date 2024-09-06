@@ -123,7 +123,7 @@ initialize <- function(
 
   # Warn when using unrooted tree, unfixed mutation rate
   if(!rooted & !fixed_mu){
-    message("Warning: Convergence may fail when rooted = FALSE and fixed_mu = FALSE, especially if samples span a short date range. Consider setting one of these arguments to TRUE.")
+    message("Note: Convergence may fail when rooted = FALSE and fixed_mu = FALSE, especially if samples span a short date range. Consider setting one of these arguments to TRUE.")
   }
 
   # Names of sequences

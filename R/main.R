@@ -171,6 +171,6 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
 
   return(list(
-    liks, output, data$names, data$rooted
+    liks, output, data$names, data$rooted, data$s_max
   ))
 }
