@@ -75,8 +75,13 @@ initialize <- function(
 
   if(rooted){
     # Load the reference sequence
-    ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
-    s_ref <- as.Date(gsub(".*\\|", "", names(ref_genome)))
+    if(file.exists(paste0("./", indir, "/ref.fasta"))){
+      ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
+      s_ref <- as.Date(gsub(".*\\|", "", names(ref_genome)))
+    }else{
+      stop("A ref.fasta file must be provided in the input_data directory when rooted = TRUE")
+    }
+
   }else{
     earliest <- which.min(s_nonref)
     ref_genome <- fasta[earliest]
