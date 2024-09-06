@@ -281,7 +281,23 @@ opt_R_pi <- function(s, a_g, lambda_g, a_s, lambda_s){
   # Shift date of sample collection back by mean sojourn interval to get approximate time of infection
   t <- s - (a_s / lambda_s)
 
-  init_vals <- c(2, 0.5)
+
+
+  # Now, the initial value of R needs to be large enough such that the expected cumulative number of cases generated over the epidemic exceeds the number of samples
+  # Max time
+  max_t <- max(t)
+  # Generation interval
+  g <- a_g / lambda_g
+  # Number of generations
+  G <- max_t / g
+
+  # Number of total cases as a function of R: (R^(G+1) - 1) / (R-1)
+  # This needs to exceed length(t) - 1
+  # Can show: for G > 0, (R^(G+1) - 1) / (R-1) > R^(G+1) / R = R^G
+  # So suffices to pick R such that R^G > length(t) - 1
+  init_R <- (length(t) - 1)^(1/G)
+
+  init_vals <- c(init_R, 0.5)
   vals <- optim(init_vals, obj, t = t, a_g = a_g, lambda_g = lambda_g)
 
   return(vals$par)

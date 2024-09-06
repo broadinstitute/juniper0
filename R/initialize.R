@@ -279,9 +279,8 @@ initialize <- function(
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
 
   # Optimize R and pi
-  #vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
+  vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
   #print(vals)
-  vals <- c(2, 0.5)
 
   mcmc$R <- vals[1] # Reproductive number
   mcmc$pi <- vals[2] # Probability of sampling
@@ -308,13 +307,13 @@ initialize <- function(
     data$snvs[[i]]$snv <- NULL
   }
 
-  print(length(unlist(mcmc$subs$from)))
+  #print(length(unlist(mcmc$subs$from)))
 
   if(!data$rooted){
     mcmc <- genotype(mcmc, data, 1)[[1]]
   }
 
-  print(length(unlist(mcmc$subs$from)))
+  #print(length(unlist(mcmc$subs$from)))
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes
