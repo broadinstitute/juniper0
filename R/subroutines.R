@@ -401,7 +401,7 @@ get_max_t <- function(mcmc, data, i, fix_child_seq = TRUE){
       ts <- c(ts, mcmc$seq[[j]][1])
     }
   }
-  if(i <= data$n_obs){
+  if(i <= data$n_obs & i != 1){
     ts <- c(ts, data$s[i])
   }
   if(length(ts) == 0){
@@ -516,6 +516,36 @@ dseq <- function(seq, w, min_t, max_t, mcmc){
   # }
   #
   # return(out)
+}
+
+## Draw from density that's uniform above 0 to max_delta, exponential below 0 with conditional mean mu_delta, and such that the PDF is continuous on (-Inf, max_delta)
+# Solve for probability p of being negative
+# p / mu_delta = (1 - p) / max_delta
+# p = mu_delta / (mu_delta + max_delta)
+rdelta <- function(mu_delta, max_delta){
+  p <- mu_delta / (mu_delta + max_delta)
+  if(runif(1) < p){
+    return(-rexp(1, 1 / mu_delta))
+  }else{
+    return(runif(1, 0, max_delta))
+  }
+}
+
+ddelta <- function(delta, mu_delta, max_delta, log){
+  p <- mu_delta / (mu_delta + max_delta)
+  if(log){
+    if(delta <= 0){
+      log(p) + dexp(-delta, 1 / mu_delta, log = TRUE)
+    }else{
+      log(1-p) + log(1 / max_delta)
+    }
+  }else{
+    if(delta <= 0){
+      p * dexp(-delta, 1 / mu_delta)
+    }else{
+      (1-p) / max_delta
+    }
+  }
 }
 
 
@@ -808,7 +838,7 @@ accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsi
   prop$prior <- prior(prop)
 
   # Accept / reject
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik[-1]) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik[-1]) - mcmc$prior + hastings){
+  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik) - mcmc$prior + hastings){
     if(noisy){
       print("Move accepted")
     }

@@ -54,7 +54,7 @@ run_mcmc <- function(init, noisy = F, logging = F){
     datas <- breakdowns[[2]]
     roots <- breakdowns[[3]]
 
-    if(noisy){
+    if(noisy & length(mcmcs) > 1){
       message(paste("Parallelizing over", length(mcmcs), "cores..."))
     }
 
@@ -123,8 +123,9 @@ run_mcmc <- function(init, noisy = F, logging = F){
        )
        print(
          paste0(
-           "Number of included hosts: ",
-           length(unlist(mcmc$seq))
+           "Total evolutionary time: ",
+           signif(tot_evo_time(mcmc), digits = 4),
+           " days"
          )
        )
        print(
@@ -133,6 +134,20 @@ run_mcmc <- function(init, noisy = F, logging = F){
            length(unlist(mcmc$tmu))
          )
        )
+       print(
+         paste0(
+           "Number of included hosts: ",
+           length(unlist(mcmc$seq))
+         )
+       )
+       if(!data$rooted){
+         print(
+           paste0(
+             "Epidemic start date: ",
+             data$s_max + mcmc$seq[[1]]
+           )
+         )
+       }
     }
 
     if(logging){

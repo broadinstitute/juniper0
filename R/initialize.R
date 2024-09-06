@@ -207,6 +207,7 @@ initialize <- function(
   data$init_mu <- init_mu
   data$fixed_mu <- fixed_mu
   data$names <- names
+  data$s_max <- s_max
 
   # Later: could move elements of "data" that aren't used in MCMC to a new "config" list
 

@@ -58,8 +58,15 @@ move_tmu <- function(mcmc, data){
 ## Update t_i and w_i and w_j's simultaneously, where j is the child of i
 # If recursive = T, also update time of infection for all ancestors of i
 move_w_t <- function(mcmc, data, recursive = F){
-  # Choose random host with ancestor
-  choices <- setdiff(2:mcmc$n, mcmc$external_roots)
+
+  if(data$rooted){
+    # Choose random host with ancestor
+    choices <- setdiff(2:mcmc$n, mcmc$external_roots)
+  }else{
+    # Choose random host
+    choices <- setdiff(1:mcmc$n, mcmc$external_roots)
+  }
+
 
   if(length(choices) == 0){
     return(mcmc)
@@ -71,8 +78,13 @@ move_w_t <- function(mcmc, data, recursive = F){
   # In recursive mode:
   if(recursive){
 
-    # All ancestors, not including root (case 1)
-    is <- ancestry(mcmc$h, i)[-1]
+    if(data$rooted){
+      # All ancestors, not including root (case 1)
+      is <- ancestry(mcmc$h, i)[-1]
+    }else{
+      # All ancestors, going down to the root
+      is <- ancestry(mcmc$h, i)
+    }
 
     max_delta <- Inf
     for (i in is) {
@@ -86,8 +98,12 @@ move_w_t <- function(mcmc, data, recursive = F){
     # Children of is
     js <- setdiff(which(mcmc$h %in% is), is)
 
-    # Maximum negative change for i
-    min_delta <- mcmc$seq[[1]][1] - mcmc$seq[[is[1]]][1]
+    if(data$rooted){
+      # Maximum negative change for i
+      min_delta <- mcmc$seq[[1]][1] - mcmc$seq[[is[1]]][1]
+    }
+
+    # Else the mechanism for picking delta is different; see below
 
   }else{
     # Which i do we update
@@ -102,36 +118,57 @@ move_w_t <- function(mcmc, data, recursive = F){
     # Children of is
     js <- which(mcmc$h == i)
 
-    # Ancestor of i
+    # Ancestor of i; can be NA if i == 1
     h <- mcmc$h[i]
 
-    # Maximum negative change for i
-    min_delta <- mcmc$seq[[h]][1] - mcmc$seq[[i]][1]
-
+    if(data$rooted | is != 1){
+      # Maximum negative change for i
+      min_delta <- mcmc$seq[[h]][1] - mcmc$seq[[i]][1]
+    }
   }
 
   # Hastings ratio for infection times of js
   hastings <- 0
 
   # P(new to old): pick seq for each j and oldest ancestor in is
-  for (j in c(js, is[1])) {
+
+  # If updating tmu and seq for 1, only care about seq and tmu for js
+  # otherwise also must update seq and tmu for the earliest of the is
+  if(!(1 %in% is)){
+    who_update_seq_tmu <- c(js, is[1])
+  }else{
+    who_update_seq_tmu <- js
+  }
+
+  for (j in who_update_seq_tmu) {
     hastings <- hastings + resample_seq(mcmc, data, j, fix_latest_host = TRUE, output = "log_p_new_old", also_resample_tmu = TRUE)
   }
 
-  # Change in time of infection for is
-  delta <- runif(1, min_delta, max_delta)
+  if(!(1 %in% is)){
+    # Change in time of infection for is
+    delta <- runif(1, min_delta, max_delta)
+  }else{
+    # If delta negative, take its mean to be 1/10 of the total evolutionary time
+    delta <- rdelta(-mcmc$seq[[1]] / 10, max_delta)
+    # P(old to new): sample delta (non-symmetric here)
+    hastings <- hastings - ddelta(delta, -mcmc$seq[[1]] / 10, max_delta, log = TRUE)
+    # After move: mcmc$seq[[1]] increases by delta, max_delta decreases by delta
+    # P(new to old):
+    hastings <- hastings + ddelta(-delta, -(mcmc$seq[[1]] + delta) / 10, max_delta - delta, log = TRUE)
+  }
 
   # Make proposal
   prop <- mcmc
 
   # Update seq and tmu for is (just adding a fixed value here)
+  # Doesnt affect i == 1
   for (i in is) {
     prop$seq[[i]] <- prop$seq[[i]] + delta
     prop$tmu[[i]] <- prop$tmu[[i]] + delta
   }
 
-  # Update seq for js and is[1] randomly
-  for (j in c(js, is[1])) {
+  # Update seq for js and (sometimes) is[1] randomly
+  for (j in who_update_seq_tmu) {
     prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = TRUE)
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
@@ -139,7 +176,9 @@ move_w_t <- function(mcmc, data, recursive = F){
 
   update <- is
   if(!recursive){
-    update <- c(update, h)
+    if(!is.na(h)){
+      update <- c(update, h)
+    }
   }
 
   return(accept_or_reject(prop, mcmc, data, update, hastings))
@@ -214,9 +253,22 @@ move_psi <- function(mcmc, data){
 ## Update genotype at (a) missing sites in observed host, or (b) all sites in unobserved host, based on parsimony
 move_genotype <- function(mcmc, data){
 
-  # Choose random host with ancestor
-  i <- sample(setdiff(2:mcmc$n, mcmc$external_roots), 1)
-  js <- which(mcmc$h == i) # Children
+  ## Choose host i for which to update genotype
+  if(data$rooted){
+    # Choose random host with ancestor
+    choices <- setdiff(2:mcmc$n, mcmc$external_roots)
+  }else{
+    # Choose random host
+    choices <- setdiff(1:mcmc$n, mcmc$external_roots)
+  }
+
+  if(length(choices) == 0){
+    return(mcmc)
+  }
+
+  i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
+
+  js <- which(mcmc$h == i) # Children of i
 
   # Proposal
   prop <- mcmc
@@ -227,9 +279,19 @@ move_genotype <- function(mcmc, data){
   prop <- prop[[1]]
 
   # Resample times of mutations
-  update <- c(i, mcmc$h[i]) # For which hosts must we update the genomic likelihood?
+  if(i == 1){
+    update <- i
+  }else{
+    update <- c(i, mcmc$h[i]) # For which hosts must we update the genomic likelihood?
+  }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(mcmc$h[i], js)))
+  if(i == 1){
+    to_check <- js
+  }else{
+    to_check <- c(mcmc$h[i], js)
+  }
+
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
 }
 
 ### Topological moves
@@ -237,7 +299,13 @@ move_genotype <- function(mcmc, data){
 ## Move the ancestor of a node one step upstream (towards tips) or one step downstream (towards root) onto next/previous tracked host
 move_h_step <- function(mcmc, data, upstream = TRUE){
   # Choose random host with ancestor
-  i <- sample(2:mcmc$n, 1)
+  choices <- 2:mcmc$n
+
+  if(length(choices) == 0){
+    return(mcmc)
+  }
+
+  i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
 
   # Children of i
   js <- which(mcmc$h == i)
@@ -309,10 +377,8 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
     if(
       # If no downstream move, reject
       # Also reject if h_old is not observed and has <= 2 total children, because then we can't remove one
-      # Also reject if tree is unrooted and we're moving a new node onto the root
       h_old == 1 |
-      (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2) |
-      (!data$rooted & mcmc$h[h_old] == 1)
+      (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2)
     ){
       return(mcmc)
     }
@@ -353,7 +419,11 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 # Else random location on tree
 move_h_global <- function(mcmc, data, biassed = T){
   # Choose random host with ancestor
-  i <- sample(2:mcmc$n, 1)
+  choices <- 2:mcmc$n
+  if(length(choices) == 0){
+    return(mcmc)
+  }
+  i <- ifelse(length(choices) == 1, choices, sample(choices, 1))
 
   # Old ancestor
   h_old <- mcmc$h[i]
@@ -383,10 +453,6 @@ move_h_global <- function(mcmc, data, biassed = T){
   choices <- which(ts < max_t)
   choices <- setdiff(choices, mcmc$external_roots)
 
-  if(!data$rooted){
-    choices <- setdiff(choices, 1)
-  }
-
   # Can't pick self
   choices <- setdiff(choices, i)
 
@@ -403,7 +469,7 @@ move_h_global <- function(mcmc, data, biassed = T){
   }
 
 
-
+  ## Stopped reading here
 
   h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = scores))
 

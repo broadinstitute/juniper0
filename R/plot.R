@@ -63,12 +63,9 @@ plot_network <- function(init, type = "standard"){
     xs <- c()
     ystart <- c()
     yend <- c()
-    if(data$rooted){
-      who <- 1:mcmc$n
-    }else{
-      who <- 2:mcmc$n
-      df_standard <- df_standard[-1, ]
-    }
+
+    who <- 1:mcmc$n
+
     for (i in who) {
       kids <- which(h == i)
       if(length(kids) > 0){
@@ -80,14 +77,20 @@ plot_network <- function(init, type = "standard"){
 
     colors <- rep('black', length(who))
     colors[who > data$n_obs] <- 'gray'
+    colors[1] <- 'red'
+
+    t <- data$s_max + t
+    xs <- data$s_max + xs
+    df_standard$x <- data$s_max + df_standard$x
+
 
     big <- ggplot2::ggplot() +
       ggplot2::geom_segment(mapping = ggplot2::aes(x = (t[h])[-1], xend = t[-1], y = thetas[-1], yend = thetas[-1]), linewidth = 0.5) +
       ggplot2::geom_segment(mapping = ggplot2::aes(x = xs, xend = xs, y = ystart, yend = yend), linewidth = 0.5) +
       ggplot2::geom_point(mapping = ggplot2::aes(x = df_standard$x, y = df_standard$y, color = colors), size = 1) +
-      ggplot2::xlab("Evolutionary Time (days)") +
+      ggplot2::xlab("Date") +
       ggplot2::scale_y_continuous(breaks = NULL) +
-      ggplot2::scale_color_manual(values = c("black", "gray")) +
+      ggplot2::scale_color_manual(values = c("black", "gray", "red")) +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         axis.title.y = ggplot2::element_blank(),

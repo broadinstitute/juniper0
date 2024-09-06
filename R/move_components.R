@@ -325,8 +325,9 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
     # Parsimonious states are whichever counts equal the maximum of count
     parsimonious <- c("A", "C", "G", "T")[which(counts == max(counts))]
 
-    # If i observed and isn't the root of an unrooted tree and has iSNV, parsimonious state must be one of the observed iSNV states
-    if(i <= data$n_obs & !(i == 1 & !data$rooted)){
+    # If i observed, parsimonious state must be one of the observed iSNV states
+    # Case 1 has no iSNVs, so this does nothing when i == 1
+    if(i <= data$n_obs){
       if(p %in% data$snvs[[i]]$isnv$pos){
         # Index of iSNV in i
         ind_isnv <- match(p, data$pos[[i]]$isnv$pos)
