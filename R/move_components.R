@@ -261,14 +261,19 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
     )
   }
 
-
+  # The dropout positions in children of i, with multiplicity
+  dropout <- unlist(mcmc$dropout[js])
 
   # If i is observed, and isn't the root of an unrooted tree, the only positions that can change are those with missing data or iSNVs
   if(i <= data$n_obs & !(i == 1 & !data$rooted)){
-    keep <- which(pos %in% data$pos[[i]]$missing | pos %in% data$pos[[i]]$isnv$pos)
+    keep <- which(pos %in% data$snvs[[i]]$missing | pos %in% data$snvs[[i]]$isnv$pos)
     pos <- pos[keep]
     current <- current[keep]
     neighbor <- neighbor[keep]
+  }
+
+  if(any(pos %in% mcmc$dropout[[i]]) & check_parsimony){
+    return(F)
   }
 
   # if(i == 1){
@@ -315,11 +320,19 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
     letter_current <- (current[pos == p])[1]
     ind_current <- match(letter_current, c("A", "C", "G", "T"))
 
-    # Whichever neighbors didn't exhibit a substitution have the current nucleotide
-    counts[ind_current] <- counts[ind_current] + n_neighbors - sum(counts)
+    # Whichever neighbors didn't exhibit a substitution AND don't dropout have the current nucleotide
 
-    if(sum(counts) != n_neighbors){
-      stop("Parsimony table error")
+    counts[ind_current] <- counts[ind_current] + (n_neighbors - sum(counts) - sum(dropout == p))
+
+    if(any(counts < 0) & !check_parsimony){
+      print(ind_current)
+      print(counts)
+      print(i)
+      print(js)
+      print(mcmc$h[i])
+      print(p)
+      print(dropout)
+      stop("Negative counts")
     }
 
     # Parsimonious states are whichever counts equal the maximum of count
@@ -330,12 +343,18 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
     if(i <= data$n_obs){
       if(p %in% data$snvs[[i]]$isnv$pos){
         # Index of iSNV in i
-        ind_isnv <- match(p, data$pos[[i]]$isnv$pos)
+        ind_isnv <- match(p, data$snvs[[i]]$isnv$pos)
 
+        # If the best choice(s) of nucleotide are among isnv calls, update parsimony to reflect this
         parsimonious <- intersect(
           parsimonious,
-          c(data$snvs[[i]]$isnv$a1, data$snvs[[i]]$isnv$a2)
+          c(data$snvs[[i]]$isnv$a1[ind_isnv], data$snvs[[i]]$isnv$a2[ind_isnv])
         )
+
+        # It's possible that under this definition, no nucleotide is parsimonious. If so, set it to either of the observed alleles in i
+        if(length(parsimonious) == 0){
+          parsimonious <- c(data$snvs[[i]]$isnv$a1[ind_isnv], data$snvs[[i]]$isnv$a2[ind_isnv])
+        }
       }
     }
 
@@ -386,39 +405,44 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
           }
         }
 
-        # Update subs[[j]]
+        # Update subs[[j]], unless dropping out at j
         for (j in js) {
-          if(p %in% mcmc$subs$pos[[j]]){
-            # What's the index of the substitution leading into j that has position "p"?
-            ind <- match(p, mcmc$subs$pos[[j]])
-            # If the new letter at i matches the to, we're substituting from a nucleotide to itself
-            if(mcmc$subs$to[[j]][ind] == letter_new){
-              mcmc$subs$from[[j]] <- mcmc$subs$from[[j]][-ind]
-              mcmc$subs$pos[[j]] <- mcmc$subs$pos[[j]][-ind]
-              mcmc$subs$to[[j]] <- mcmc$subs$to[[j]][-ind]
+          if(!(p %in% mcmc$dropout[[j]])){
+            if(p %in% mcmc$subs$pos[[j]]){
+              # What's the index of the substitution leading into j that has position "p"?
+              ind <- match(p, mcmc$subs$pos[[j]])
+              # If the new letter at i matches the to, we're substituting from a nucleotide to itself
+              if(mcmc$subs$to[[j]][ind] == letter_new){
+                mcmc$subs$from[[j]] <- mcmc$subs$from[[j]][-ind]
+                mcmc$subs$pos[[j]] <- mcmc$subs$pos[[j]][-ind]
+                mcmc$subs$to[[j]] <- mcmc$subs$to[[j]][-ind]
+              }else{
+                # Otherwise, we've created a new "from" with the same to
+                mcmc$subs$from[[j]][ind] <- letter_new
+              }
             }else{
-              # Otherwise, we've created a new "from" with the same to
-              mcmc$subs$from[[j]][ind] <- letter_new
+              # If no mutation present, add it
+              mcmc$subs$from[[j]] <- c(mcmc$subs$from[[j]], letter_new)
+              mcmc$subs$pos[[j]] <- c(mcmc$subs$pos[[j]], p)
+              mcmc$subs$to[[j]] <- c(mcmc$subs$to[[j]], letter_current)
             }
-          }else{
-            # If no mutation present, add it
-            mcmc$subs$from[[j]] <- c(mcmc$subs$from[[j]], letter_new)
-            mcmc$subs$pos[[j]] <- c(mcmc$subs$pos[[j]], p)
-            mcmc$subs$to[[j]] <- c(mcmc$subs$to[[j]], letter_current)
           }
         }
 
         ## Update bot[[i]]
         if(i <= data$n_obs){
           if(data$vcf_present[i]){
-            # What's the index of the relevant iSNV in i?
-            ind <- match(p, data$snvs[[i]]$isnv$pos)
-            if(letter_new == data$snvs[[i]]$isnv$a1[ind]){
-              mcmc$bot[[i]][ind] <- TRUE
-            }else if(letter_new == data$snvs[[i]]$isnv$a2[ind]){
-              mcmc$bot[[i]][ind] <- FALSE
-            }else{
-              stop("The proposed allele is neither a1 nor a2")
+            # If we're updating this site because it has an iSNV...
+            if(p %in% data$snvs[[i]]$isnv$pos){
+              # What's the index of the relevant iSNV in i?
+              ind <- match(p, data$snvs[[i]]$isnv$pos)
+              if(letter_new == data$snvs[[i]]$isnv$a1[ind]){
+                mcmc$bot[[i]][ind] <- TRUE
+              }else if(letter_new == data$snvs[[i]]$isnv$a2[ind]){
+                mcmc$bot[[i]][ind] <- FALSE
+              }else{
+                stop("The proposed allele is neither a1 nor a2")
+              }
             }
           }
         }

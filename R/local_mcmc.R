@@ -34,23 +34,65 @@ local_mcmc <- function(mcmc, data){
 
   for (r in 1:data$n_local) {
 
-
-
-
-
-    #Move 11
-    mcmc <- move_seq(mcmc, data, also_resample_tmu = F)
-
     if(length(unlist(mcmc$tmu)) != length(unlist(mcmc$subs$from))){
       print(r)
       stop("Updated mutations wrong")
     }
 
-    if(!all(mcmc$g_lik[2:mcmc$n] == sapply(2:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-      print(which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+    if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$g_lik[bad])
+      print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
       print(r)
+      print(data$rooted)
       stop("Genomic likelihood error")
     }
+
+    ## Check that no SNVs are listed in "dropout"
+    for (i in 1:mcmc$n) {
+      if(any(
+        mcmc$subs$pos[[i]] %in% mcmc$dropout[[i]]
+      )){
+        stop("No mutations should be listed at positions that drop out")
+      }
+    }
+
+    ## Check that "dropout" is always correct
+    for (i in 1:mcmc$n) {
+      if(
+        any(mcmc$dropout[[i]] != get_dropout(mcmc, data, i)) | (!all(mcmc$dropout[[mcmc$h[i]]] %in% mcmc$dropout[[i]]))
+      ){
+        stop("Dropout updated incorrectly")
+      }
+    }
+
+    # Check that external roots have degree 0
+    if(any(mcmc$external_roots %in% mcmc$h)){
+      stop("External roots must have degree 0")
+    }
+
+    if(mcmc$n > data$n_obs){
+      degs <- sapply((data$n_obs + 1):(mcmc$n), function(n){length(which(mcmc$h == n))})
+      if(any(degs < 2 & !((data$n_obs + 1):(mcmc$n) %in% mcmc$external_roots))){
+        print(which(degs < 2) + data$n_obs)
+        print(mcmc$external_roots)
+        print(r)
+        stop("degree error")
+      }
+    }
+
+    if(!data$observed_root & length(which(mcmc$h == 1)) < 2){
+      print(which(mcmc$h == 1))
+      print(r)
+      stop("root degree error")
+    }
+
+
+
+    #Move 11
+    mcmc <- move_seq(mcmc, data, also_resample_tmu = F)
 
     mcmc <- move_seq(mcmc, data, also_resample_tmu = T)
 
@@ -74,10 +116,16 @@ local_mcmc <- function(mcmc, data){
       mcmc <- move_h_step(mcmc, data, upstream = F)
     }
 
-
     # Move 20
     mcmc <- move_h_global(mcmc, data)
+
+
+
+
+
     mcmc <- move_h_global(mcmc, data, biassed = F)
+
+
 
     # Move 21
     mcmc <- move_swap(mcmc, data)
@@ -85,8 +133,20 @@ local_mcmc <- function(mcmc, data){
     # Move 22
     mcmc <- move_swap(mcmc, data, exchange_children = T)
 
+
+
     # Move 23
     mcmc <- move_genotype(mcmc, data)
+
+
+
+    # if(87 > data$n_obs & length(which(mcmc$h == 87)) < 2 & 87 <= mcmc$n){
+    #   print(data$n_obs)
+    #   print(mcmc$external_roots)
+    #   print(which(mcmc$h == 88))
+    #   print(r)
+    #   stop("degree issue")
+    # }
 
     if(runif(1) < 1/2){
       # Move 24
@@ -95,6 +155,7 @@ local_mcmc <- function(mcmc, data){
       # Move 25
       mcmc <- move_delete(mcmc, data)
     }
+
 
 
 
@@ -139,7 +200,9 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
 
   # If we didn't break up the tree, nothing to do here!
   if(n_subtrees == 1){
-    return(all_res[[1]])
+    return(
+      list(all_res[[1]], 1)
+    )
   }else{
 
     ## Loop through each sample and produce an amalgamated MCMC state:
@@ -147,6 +210,10 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
     # Create a list to store the amalgamated results
     res <- list()
     for (i in 1:n_samples) {
+
+      if(i == n_samples){
+        new_roots <- c()
+      }
 
       # Get the root cluster of each cluster
       # anc_clusters <- c()
@@ -210,31 +277,44 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       mcmc$subs$pos <- mcmc$subs$pos[1:mcmc$n]
       mcmc$subs$to <- mcmc$subs$to[1:mcmc$n]
       mcmc$tmu <- mcmc$tmu[1:mcmc$n]
+      mcmc$bot <- mcmc$bot[1:mcmc$n]
+      mcmc$dropout <- mcmc$dropout[1:mcmc$n]
       mcmc$g_lik <- mcmc$g_lik[1:mcmc$n]
       mcmc$root <- NULL
       mcmc$cluster <- NULL
 
+      mcmc$e_lik <- 0
+      mcmc$g_lik <- rep(0, mcmc$n)
+
       # Update all entries of mcmc for each cluster (plus roots of upstream clusters)
       for (j in 1:n_subtrees) {
+
+        #print("hi")
 
         # UPDATE H
         mcmc$h[mappings[[j]]] <- mappings[[j]][all_res[[j]][[i]]$h]
 
         # Update other components of mcmc (easier!)
-
-        # mcmc$d does not update at frozen nodes
-        unfrozen <- setdiff(1:all_res[[j]][[i]]$n, all_res[[j]][[i]]$external_roots)
-
         mcmc$seq[mappings[[j]]] <- all_res[[j]][[i]]$seq
-        mcmc$subs[mappings[[j]]] <- all_res[[j]][[i]]$subs
 
+        mcmc$subs$from[mappings[[j]]] <- all_res[[j]][[i]]$subs$from
+        mcmc$subs$pos[mappings[[j]]] <- all_res[[j]][[i]]$subs$pos
+        mcmc$subs$to[mappings[[j]]] <- all_res[[j]][[i]]$subs$to
         mcmc$tmu[mappings[[j]]] <- all_res[[j]][[i]]$tmu
+
+
+
         mcmc$bot[mappings[[j]]] <- all_res[[j]][[i]]$bot
+        mcmc$dropout[mappings[[j]]] <- all_res[[j]][[i]]$dropout
 
-        mcmc$g_lik[mappings[[j]]] <- all_res[[j]][[i]]$g_lik
+        ## Fix this at external roots: g_lik determined at upstream cluster
+        mcmc$g_lik[mappings[[j]]] <- mcmc$g_lik[mappings[[j]]] + all_res[[j]][[i]]$g_lik
 
-        # For e_lik, compute as differences
-        mcmc$e_lik <- mcmc$e_lik + all_res[[j]][[i]]$e_lik - ifelse(i==1, mcmcs[[j]]$e_lik, all_res[[j]][[i-1]]$e_lik)
+        mcmc$e_lik <- mcmc$e_lik + all_res[[j]][[i]]$e_lik
+
+        if(i == n_samples){
+          new_roots <- c(new_roots, mappings[[j]][1])
+        }
       }
 
 
@@ -244,9 +324,34 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       # Can make this smarter...
 
       res[[i]] <- mcmc
+
+      if(abs(mcmc$e_lik - e_lik(mcmc, data)) > 0.01){
+        print(mcmc$e_lik, digits = 20)
+        print(e_lik(mcmc, data), digits = 20)
+        stop("e_lik error in amalgamate")
+      }
+
+      if(any(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+
+        stop("g_lik error in amalgamate")
+      }
+
+
+
+
+
     }
 
-    return(res)
+    if(mcmc$n > data$n_obs){
+      degs <- sapply((data$n_obs + 1):(mcmc$n), function(n){length(which(mcmc$h == n))})
+      if(any(degs < 2 & !((data$n_obs + 1):(mcmc$n) %in% mcmc$external_roots))){
+        print(which(degs < 2) + data$n_obs)
+        print(new_roots)
+        stop("degree error in amalgamate")
+      }
+    }
+
+    return(list(res, new_roots))
 
   }
 }

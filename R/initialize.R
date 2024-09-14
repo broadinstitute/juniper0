@@ -27,9 +27,9 @@ initialize <- function(
     n_global = 100, # Number of global moves
     n_local = 100, # Number of local moves per global move
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
-    init_mst = TRUE, # Should we initialize to a minimum spanning tree?
+    init_mst = FALSE, # Should we initialize to a minimum spanning tree?
     init_ancestry = FALSE, # Specify the starting ancestry
-    rooted = TRUE, # Is the root of the transmission network fixed at the ref sequence?
+    rooted = FALSE, # Is the root of the transmission network fixed at the ref sequence?
     N = NA, # Population size
     record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"), # Which aspects of mcmc do we want to record
     filters = NULL,
@@ -82,10 +82,19 @@ initialize <- function(
       stop("A ref.fasta file must be provided in the input_data directory when rooted = TRUE")
     }
 
+    if(any(
+      !(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
+    )){
+      stop("ref.fasta cannot have any missing positions")
+    }
+
   }else{
     earliest <- which.min(s_nonref)
     ref_genome <- fasta[earliest]
     names(ref_genome) <- "ref_genome"
+
+    # Fill the ref_genome's missing sites with "A". Again, this doesn't matter, since genotype() will update all of them
+    ref_genome[[1]][!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))] <- base_to_raw("A")
 
     # Going to initialize time of collection to 10 days before earliest sequence collection
     s_ref <- min(s_nonref) - 10
@@ -284,11 +293,14 @@ initialize <- function(
   mcmc$psi <- psi # second parameter, NBin offspring distribution (computed in terms of R0)
 
   # Optimize R and pi
-  vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
+  #vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
   #print(vals)
 
-  mcmc$R <- vals[1] # Reproductive number
-  mcmc$pi <- vals[2] # Probability of sampling
+  mcmc$R <- 2
+  mcmc$pi <- 0.5
+
+  #mcmc$R <- vals[1] # Reproductive number
+  #mcmc$pi <- vals[2] # Probability of sampling
   mcmc$N_eff <- N_eff
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
@@ -299,6 +311,12 @@ initialize <- function(
   # Times at which mutations occur
   mcmc$tmu <- list()
 
+  # Which positions are missing in i and all (direct and indeirect) children of i?
+  mcmc$dropout <- list()
+
+  # Which positions are missing everywhere?
+  dropout_everywhere <- 1:n_bases
+
   for (i in 1:n) {
     n_subs <- length(mcmc$subs$from[[i]])
     if(n_subs > 0){
@@ -306,19 +324,40 @@ initialize <- function(
     }else{
       mcmc$tmu[[i]] <- numeric(0)
     }
+
+    # Also note which positions drop out at i
+    mcmc$dropout[[i]] <- data$snvs[[i]]$missing
+    dropout_everywhere <- intersect(dropout_everywhere, mcmc$dropout[[i]])
+  }
+  # Whichever positions dropout everywhere also dropout in the root
+  if(!rooted){
+    mcmc$dropout[[1]] <- dropout_everywhere
+  }else{
+    mcmc$dropout[[1]] <- integer(0)
   }
 
+
+  # No longer any need to store SNVs relative to root
   for (i in 1:n) {
     data$snvs[[i]]$snv <- NULL
   }
 
-  #print(length(unlist(mcmc$subs$from)))
+  print(length(unlist(mcmc$subs$from)))
 
   if(!data$rooted){
     mcmc <- genotype(mcmc, data, 1)[[1]]
   }
 
-  #print(length(unlist(mcmc$subs$from)))
+  print(length(unlist(mcmc$subs$from)))
+
+  ## Check that no SNVs are listed in "dropout"
+  for (i in 1:n) {
+    if(any(
+      mcmc$subs$pos[[i]] %in% mcmc$dropout[[i]]
+    )){
+      stop("No mutations should be listed at positions that drop out")
+    }
+  }
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes

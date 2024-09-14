@@ -143,6 +143,10 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
   out$snv$to <- new
   out$missing <- missing_pos
 
+  if(any(out$isnv$pos %in% out$missing)){
+    stop("There are sites reported as missing in the FASTA and non-missing in the corresponding VCF")
+  }
+
   return(out)
 
 }
@@ -218,12 +222,12 @@ get_ts <- function(mcmc, data, i){
 }
 
 # Get total evolutionary time
-evo_time <- function(i, mcmc){
-  mcmc$seq[[i]][1] - mcmc$seq[[mcmc$h[i]]][1]
+evo_time <- function(i, mcmc, data){
+  (mcmc$seq[[i]][1] - mcmc$seq[[mcmc$h[i]]][1]) * (data$n_bases - length(mcmc$dropout[[i]]))
 }
 
-tot_evo_time <- function(mcmc){
-  sum(sapply(2:mcmc$n, evo_time, mcmc = mcmc))
+tot_evo_time <- function(mcmc, data){
+  sum(sapply(2:mcmc$n, evo_time, mcmc = mcmc, data = data))
 }
 
 ## Get optimal values of R and pi, approximately
@@ -624,7 +628,7 @@ update_genetics <- function(mcmc, i, h, upstream){
   }
 
   # Clear out SNVs where from == to
-  keep <- from != to
+  keep <- (from != to)
 
   mcmc$subs$from[[i]] <- from[keep]
   mcmc$subs$pos[[i]] <- pos[keep]
@@ -650,13 +654,57 @@ shift <- function(mcmc, data, i, h_old, h_new, upstream){
   mcmc$h[i] <- h_new # Update the ancestor
   # For update genetics upstream, h represents the new ancestor
   if(upstream){
+
+    # Update dropout in order from tips towards root
+    mcmc$dropout[[h_new]] <- get_dropout(mcmc, data, h_new)
+    mcmc$dropout[[h_old]] <- get_dropout(mcmc, data, h_old)
+
     mcmc <- update_genetics(mcmc, i, h_new, TRUE) # Update genetics. i is inheriting from h_new.
+
   }else{
+    # Update dropout in order from tips towards root
+    mcmc$dropout[[h_old]] <- get_dropout(mcmc, data, h_old)
+    mcmc$dropout[[h_new]] <- get_dropout(mcmc, data, h_new)
+
     # For update genetics downstream, h represents the old ancestor
     mcmc <- update_genetics(mcmc, i, h_old, FALSE)
   }
 
   return(mcmc)
+}
+
+get_dropout <- function(mcmc, data, i){
+
+  # If rooted and i is the root, nothing to do here
+  # UPDATE if we decide to allow missing positions in the root
+  if(data$rooted & i == 1){
+    return(integer(0))
+  }
+
+  # Children of i
+  js <- which(mcmc$h == i)
+
+  # If no children, only dropouts are missing positions if i observed, or all positions if not
+  if(length(js) == 0){
+    if(i <= data$n_obs){
+      return(data$snvs[[i]]$missing)
+    }else{
+      return(1:data$n_bases)
+    }
+  }
+
+  # Dropout at i is dropout at kids of i
+  out <- Reduce(intersect, mcmc$dropout[js])
+
+  # If i unobserved, nothing left to do here
+  if(i > data$n_obs | (!data$rooted & i == 1)){
+    return(out)
+  }
+
+  # Only dropout positions are missing ones
+  out <- intersect(out, data$snvs[[i]]$missing)
+  return(out)
+
 }
 
 

@@ -92,13 +92,31 @@ breakdown <- function(mcmc, data, old_roots){
     mcmcs[[i]]$h <- mcmcs[[i]]$h[joined]
     mcmcs[[i]]$h <- match(mcmcs[[i]]$h, joined)
     mcmcs[[i]]$seq <- mcmcs[[i]]$seq[joined]
-    mcmcs[[i]]$subs <- mcmcs[[i]]$subs[joined]
+
+    # Care only about the first element of seq[[1]], analog of epidemic start time
+    mcmcs[[i]]$seq[[1]] <- mcmcs[[i]]$seq[[1]][1]
+
+    mcmcs[[i]]$subs$from <- mcmcs[[i]]$subs$from[joined]
+    mcmcs[[i]]$subs$pos <- mcmcs[[i]]$subs$pos[joined]
+    mcmcs[[i]]$subs$to <- mcmcs[[i]]$subs$to[joined]
     mcmcs[[i]]$tmu <- mcmcs[[i]]$tmu[joined]
+
+    # Clear out mutations for root
+    mcmcs[[i]]$subs$from[[1]] <- character(0)
+    mcmcs[[i]]$subs$pos[[1]] <- integer(0)
+    mcmcs[[i]]$subs$to[[1]] <- character(0)
+    mcmcs[[i]]$tmu[[1]] <- numeric(0)
+
+    mcmcs[[i]]$dropout <- mcmcs[[i]]$dropout[joined]
+    mcmcs[[i]]$bot <- mcmcs[[i]]$bot[joined] # May contain some NAs, check if this causes issues
 
     mcmcs[[i]]$g_lik <- mcmcs[[i]]$g_lik[joined]
 
     # The roots of external clusters have been relabeled
     mcmcs[[i]]$external_roots <- match(mcmcs[[i]]$external_roots, joined)
+
+    # Genomic likelihood at external roots resets to 0
+    mcmcs[[i]]$g_lik[mcmcs[[i]]$external_roots] <- 0
 
     datas[[i]] <- data
     datas[[i]]$s <- datas[[i]]$s[joined]
@@ -109,9 +127,13 @@ breakdown <- function(mcmc, data, old_roots){
     }
 
     datas[[i]]$snvs <- datas[[i]]$snvs[joined]
-    datas[[i]]$frozen <- setdiff(which(joined %in% subtrees[[1]]), 1)
 
-    datas[[i]]$observed_root <- (root < data$n_obs)
+    datas[[i]]$vcf_present <- (data$vcf_present[joined])[1:datas[[i]]$n_obs]
+    if(is.na(datas[[i]]$vcf_present[1])){
+      datas[[i]]$vcf_present[1] <- F
+    }
+
+    datas[[i]]$observed_root <- (root <= data$n_obs)
 
     # Root always treated as fixed within subtree, UNLESS it's the root subtree
     if(root != 1){
@@ -120,6 +142,23 @@ breakdown <- function(mcmc, data, old_roots){
 
     # e_lik needs to be re-computed based on the smaller set
     mcmcs[[i]]$e_lik <- e_lik(mcmcs[[i]], datas[[i]])
+    if(is.infinite(mcmcs[[i]]$e_lik)){
+      stop("e_lik error in breakdown")
+    }
+
+    if(any(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))){
+
+      bad <- which(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))
+      print(joined)
+      print(datas[[i]]$vcf_present)
+      print(bad)
+      print(mcmcs[[i]]$g_lik[bad])
+      print(sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]])[bad])
+
+
+      stop("g_lik error in breakdown")
+    }
+
 
     # Record only observed hosts in each cluster
     mcmcs[[i]]$cluster <- joined[joined <= data$n_obs]

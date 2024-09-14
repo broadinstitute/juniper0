@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 # Compute epidemiological log likelihood
-e_lik <- function(mcmc, data){
+e_lik <- function(mcmc, data, noisy = F){
 
     ids <- c()
     hs <- c()
@@ -38,24 +38,47 @@ e_lik <- function(mcmc, data){
     }
     t_inf <- unlist(mcmc$seq)
 
+    if(noisy){
+      print(mcmc$seq[[1]])
+      print(hs)
+    }
+
     hs[ids] <- hs
     t_inf[ids] <- t_inf
     #ids[ids] <- ids
     t_samp <- c(data$s[1:data$n_obs], rep(NA, length(t_inf) - data$n_obs))
 
+
+
     ttree <- matrix(c(t_inf, t_samp, hs), ncol = 3, byrow = F)
     ttree[1, 3] <- 0 # Ancestor of person 1 designated as 0
+
+    if(noisy){
+      print(ttree)
+    }
 
     # 1st param in NBin offspring distribution
     rho <- mcmc$R * mcmc$psi / (1 - mcmc$psi)
 
+    # TransPhylo likelihood not computed at roots of external clusters
+    correction <- 0
+    if(!is.null(mcmc$external_roots)){
+      if(length(mcmc$external_roots) > 0){
+        ttree_correction <- ttree[mcmc$external_roots, , drop = F]
+        ttree_correction[, 3] <- 0 # Set all of these to be roots, so all we're subtracting off is their (lack of) transmissions and (lack of) time of sampling
+        correction <- TransPhylo::probTTree(
+          ttree_correction, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
+        )
+      }
+    }
+
     # The epi likelihood now also includes the term for the JC mutation model
-    prob_JC <- -mcmc$mu * data$n_bases * tot_evo_time(mcmc) + length(unlist(mcmc$subs$from[2:mcmc$n])) * log(mcmc$mu / 3)
+    prob_JC <- -mcmc$mu * tot_evo_time(mcmc, data) + length(unlist(mcmc$subs$from[2:mcmc$n])) * log(mcmc$mu / 3)
 
     return(
       prob_JC + TransPhylo::probTTree(
         ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
-      )
+      ) - correction
     )
 }
 
@@ -63,7 +86,13 @@ e_lik <- function(mcmc, data){
 # This is now just the probability of the iSNVs layered on top
 g_lik <- function(mcmc, data, i){
 
+  #return(0)
+
   if(i > data$n_obs){
+    return(0)
+  }
+
+  if(i %in% mcmc$external_roots){
     return(0)
   }
 
@@ -192,8 +221,7 @@ g_lik <- function(mcmc, data, i){
   ))
 
   # And finally, all other sites
-  # Use inclusion/exclusion to get the number of other sites
-  out <- out + (data$n_bases - length(unique(c(isnv_pos, trans_isnv_pos)))) * pprop(data$filters$af, mcmc$mu / mcmc$N_eff, log = T)
+  out <- out + (data$n_bases - length(unique(c(isnv_pos, trans_isnv_pos))) - length(data$snvs[[i]]$missing)) * pprop(data$filters$af, mcmc$mu / mcmc$N_eff, log = T)
 
   return(out)
 }

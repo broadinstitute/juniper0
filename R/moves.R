@@ -181,6 +181,8 @@ move_w_t <- function(mcmc, data, recursive = F){
     }
   }
 
+  update <- c(1, update)
+
   return(accept_or_reject(prop, mcmc, data, update, hastings))
 }
 
@@ -286,9 +288,9 @@ move_genotype <- function(mcmc, data){
   }
 
   if(i == 1){
-    to_check <- js
+    to_check <- c(i, js)
   }else{
-    to_check <- c(mcmc$h[i], js)
+    to_check <- c(mcmc$h[i], i, js)
   }
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
@@ -327,21 +329,32 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
   # Probability of proposing current genome and current seq
   hastings <- hastings +
-    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE) +
-    genotype(mcmc, data, i, output = "log_p_new_old")
+    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = (i %in% mcmc$external_roots))
 
+  # Only resample genotype if i isn't root of another cluster
+  if(!(i %in% mcmc$external_roots)){
+    hastings <- hastings + genotype(mcmc, data, i, output = "log_p_new_old")
+  }
 
   if(upstream){
     # Who are the other children of h_old?
     children <- setdiff(which(mcmc$h == h_old), i)
     children <- setdiff(children, mcmc$external_roots)
 
-    if(length(children) == 0 | (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2)){
+    if(
+      length(children) == 0 |
+      (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2) |
+      (h_old == 1 & length(which(mcmc$h == h_old)) <= 2 & !data$observed_root)
+    ){
       return(mcmc)
     }
 
     # Pick one
     h_new <- ifelse(length(children) == 1, children, sample(children, 1))
+
+    if(h_new %in% mcmc$external_roots){
+      return(mcmc)
+    }
 
     # If times incompatible, return mcmc
     if(fix_latest_host){
@@ -358,18 +371,20 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
     hastings <- hastings - log(1 / length(children))
 
     # Update ancestor and initialize genetics
-    prop$h[i] <- h_new
-    prop <- update_genetics(prop, i, h_new, upstream = T)
+    prop <- shift(prop, data, i, h_old, h_new, upstream = T)
 
     # Resample seq
-    prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = F)
+    prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = (i %in% mcmc$external_roots))
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
 
     # Resample genotype
-    prop <- genotype(prop, data, i)
-    hastings <- hastings - prop[[3]]
-    prop <- prop[[1]]
+    if(!(i %in% mcmc$external_roots)){
+      prop <- genotype(prop, data, i)
+      hastings <- hastings - prop[[3]]
+      prop <- prop[[1]]
+    }
+
 
   }else{
 
@@ -387,18 +402,19 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
     h_new <- mcmc$h[h_old]
 
     # Update ancestor and initialize genetics
-    prop$h[i] <- h_new
-    prop <- update_genetics(prop, i, h_old, upstream =F)
+    prop <- shift(prop, data, i, h_old, h_new, upstream = F)
 
     # Resample seq
-    prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = F)
+    prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = (i %in% mcmc$external_roots))
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
 
     # Resample genotype (which also resamples tmu)
-    prop <- genotype(prop, data, i)
-    hastings <- hastings - prop[[3]]
-    prop <- prop[[1]]
+    if(!(i %in% mcmc$external_roots)){
+      prop <- genotype(prop, data, i)
+      hastings <- hastings - prop[[3]]
+      prop <- prop[[1]]
+    }
 
     # Who are the other children h_new? (For hastings ratio)
     children <- setdiff(which(prop$h == h_new), i)
@@ -410,7 +426,7 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings = hastings, check_parsimony = c(h_old, h_new, js)))
+  return(accept_or_reject(prop, mcmc, data, update, hastings = hastings, check_parsimony = c(h_old, h_new, i, js)))
 }
 
 ## Global change in ancestor
@@ -435,18 +451,25 @@ move_h_global <- function(mcmc, data, biassed = T){
     fix_latest_host <- TRUE # If i is the root of a downstream cluster, can't resample time of infection of i
   }else{
     fix_latest_host <- FALSE
-
   }
 
   hastings <- 0
 
   # Probability of proposing current genome and current seq
   hastings <- hastings +
-    genotype(mcmc, data, i, output = "log_p_new_old") +
-    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = FALSE)
+    resample_seq(mcmc, data, i, fix_latest_host, output = "log_p_new_old", also_resample_tmu = (i %in% mcmc$external_roots))
+
+  if(!(i %in% mcmc$external_roots)){
+    hastings <- hastings + genotype(mcmc, data, i, output = "log_p_new_old")
+  }
 
   # Max time at which i can be infected
-  max_t <- get_max_t(mcmc, data, i)
+  if(fix_latest_host){
+    max_t <- mcmc$seq[[i]][1]
+  }else{
+    max_t <- get_max_t(mcmc, data, i)
+  }
+
 
   # Nodes which are infected earlier than i
   ts <- sapply(mcmc$seq, function(v){v[1]})
@@ -457,7 +480,11 @@ move_h_global <- function(mcmc, data, biassed = T){
   choices <- setdiff(choices, i)
 
   # If no choices, or removing i from a node that's unobserved and has 2 kids, reject
-  if(length(choices) == 0 | (h_old > data$n_obs & sum(mcmc$h[2:mcmc$n] == h_old) <= 2)){
+  if(
+    length(choices) == 0 |
+    (h_old > data$n_obs & length(which(mcmc$h == h_old)) <= 2) |
+    (h_old == 1 & length(which(mcmc$h == h_old)) <= 2 & !data$observed_root)
+  ){
     return(mcmc)
   }
 
@@ -467,9 +494,6 @@ move_h_global <- function(mcmc, data, biassed = T){
   }else{
     scores <- rep(1/length(choices), length(choices))
   }
-
-
-  ## Stopped reading here
 
   h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = scores))
 
@@ -493,18 +517,15 @@ move_h_global <- function(mcmc, data, biassed = T){
   }
 
   # Resample seq
-  prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = FALSE)
+  prop <- resample_seq(prop, data, i, fix_latest_host, also_resample_tmu = (i %in% mcmc$external_roots))
   hastings <- hastings - prop[[3]]
   prop <- prop[[1]]
 
   # Resample genotype
-  prop <- genotype(prop, data, i)
-  hastings <- hastings - prop[[3]]
-  prop <- prop[[1]]
-
-  new_max_t <- get_max_t(prop, data, i)
-  if(new_max_t != max_t){
-    stop("max_t error")
+  if(!(i %in% mcmc$external_roots)){
+    prop <- genotype(prop, data, i)
+    hastings <- hastings - prop[[3]]
+    prop <- prop[[1]]
   }
 
   # Scores for proposing the move in the opposite direction
@@ -518,7 +539,7 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, js)))
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, i, js)))
 
 }
 
@@ -571,10 +592,14 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
 
   # Update the state
   prop <- mcmc
+
   prop <- shift(prop, data, j, i, h, upstream = F) # Shift j from i onto h
+
   prop <- shift(prop, data, i, h, j, upstream = T) # Shift i from h onto j
+
   prop$seq[[j]] <- mcmc$seq[[i]] # Swapping seq
   prop$seq[[i]] <- mcmc$seq[[j]]
+
 
 
   if(exchange_children){
@@ -782,6 +807,12 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     n_move <- ifelse(min_n_move == max_n_move, min_n_move, sample(min_n_move:max_n_move, 1))
 
     ## Term 2
+    if(is.nan(log(1/(max_n_move - min_n_move + 1)))){
+      print(min_n_move)
+      print(max_n_move)
+      stop("bad1")
+    }
+
     hastings <- hastings - log(1 / (max_n_move - min_n_move + 1))
 
 
@@ -818,6 +849,10 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
   prop$subs$to[[i]] <- character(0)
 
   prop$tmu[[i]] <- numeric(0)
+
+  prop$dropout[[i]] <- 1:data$n_bases
+
+  prop$bot[[i]] <- list(NULL)
 
 
 
@@ -857,6 +892,12 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     for (k in ks) {
       prop <- shift(prop, data, k, j1, i, upstream = F)
     }
+  }
+
+  # If unobserved root and has degree 1, reject
+  # Can be made more efficient by rejecting earlier
+  if(length(which(prop$h == 1)) < 2 & !data$observed_root){
+    return(mcmc)
   }
 
   # For the first element of prop$seq[[i]], choose uniformly random time up through prop$seq[[j]][1]
@@ -899,12 +940,13 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
 
   ## For the move in the reverse direction: we need to pick i as the node to remove, and sample seq for js
   # Reverses Term 1 below
+  choices <- setdiff((data$n_obs + 1):(prop$n), prop$external_roots)
   if(biassed){
     # P(new to old): pick i as the host to remove, among unobserved hosts with degree 2
-    ds <- sapply((data$n_obs + 1):prop$n, function(x){length(which(prop$h == x))})
+    ds <- sapply(choices, function(x){length(which(prop$h == x))})
     hastings <- hastings + log(1 / sum(ds == 2))
   }else{
-    hastings <- hastings + log(1 / (prop$n - data$n_obs)) # P(new to old): pick i as the host to remove
+    hastings <- hastings + log(1 / length(choices)) # P(new to old): pick i as the host to remove
   }
 
   # Reverses Terms 2 below
@@ -923,9 +965,9 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
   }
 
   if(biassed){
-    to_check <- unique(c(h, js, mcmc$h[js]))
+    to_check <- unique(c(h, i, js, mcmc$h[js]))
   }else{
-    to_check <- c(h, js)
+    to_check <- c(h, i, js)
   }
 
   return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
@@ -947,9 +989,9 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
   hastings <- 0
 
   # Who to delete
-  choices <- (data$n_obs + 1):(mcmc$n)
+  choices <- setdiff((data$n_obs + 1):(mcmc$n), mcmc$external_roots)
   if(biassed){
-    ds <- sapply((data$n_obs + 1):mcmc$n, function(x){length(which(mcmc$h == x))})
+    ds <- sapply(choices, function(x){length(which(mcmc$h == x))})
     choices <- choices[which(ds == 2)]
 
     if(length(choices) == 0){
@@ -966,6 +1008,8 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
 
 
 
+
+
   if(!upstream){
     ts <- sapply(mcmc$seq[js], function(v){v[1]})
 
@@ -974,6 +1018,18 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
       return(mcmc)
     }
     j1 <- js[which.min(ts)]
+    # print("top")
+    # print(i)
+    # print(js)
+    # print(j1)
+    # print(which(mcmc$h == j1))
+    # print(mcmc$external_roots)
+
+    # j1 will gain some kids, so cannot be an external root
+    if(j1 %in% mcmc$external_roots){
+      return(mcmc)
+    }
+
     ks <- setdiff(js, j1)
 
   }
@@ -1011,7 +1067,6 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
 
   }
 
-
   ## Re-indexing: everyone above i steps down 1, i gets deleted
   prop$h[which(prop$h > i)] <- prop$h[which(prop$h > i)] - 1
   prop$n <- prop$n - 1
@@ -1022,6 +1077,8 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
   prop$subs$pos <- prop$subs$pos[-i]
   prop$subs$to <- prop$subs$to[-i]
   prop$tmu <- prop$tmu[-i]
+  prop$dropout <- prop$dropout[-i]
+  prop$bot <- prop$bot[-i]
 
   # "$bot" does not exist for unobserved hosts
 
@@ -1090,6 +1147,12 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
     }
   }
 
+  # If unobserved root and has degree 1, reject
+  # Can be made more efficient by rejecting earlier
+  if(length(which(prop$h == 1)) < 2 & !data$observed_root){
+    return(mcmc)
+  }
+
 
   # Resample seq for js (or j1 and ks)
   # Terms 2
@@ -1098,6 +1161,7 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
   }
+
 
 
 
@@ -1175,6 +1239,11 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
       }
 
 
+      if(is.nan(log(1/(max_n_move - min_n_move + 1)))){
+        print(min_n_move)
+        print(max_n_move)
+        stop("bad2")
+      }
 
       # Reverse Terms 2, 3
       hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
@@ -1197,9 +1266,23 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
       max_n_move <- sum(prop$h[2:prop$n] == j1) - 2
     }
 
+    if(is.nan(log(1/(max_n_move - min_n_move + 1)))){
+      print(min_n_move)
+      print(max_n_move)
+      stop("bad3")
+    }
+
     # Reverse Terms 2, 3
+    #print(hastings)
     hastings <- hastings + log(1 / (max_n_move - min_n_move + 1)) # P(new -> old): pick number of people to move
+    # print("bottom")
+    # print(j1)
+    # print(which(prop$h == j1))
+    # print(prop$external_roots)
+    # print(data$n_obs)
+    # print(hastings)
     hastings <- hastings - lchoose(sum(prop$h[2:prop$n] == j1), length(ks)) # P(new to old): pick who moves
+    #print(hastings)
 
   }
 
