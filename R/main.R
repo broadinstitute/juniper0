@@ -49,11 +49,11 @@ run_mcmc <- function(init, noisy = F, logging = F){
     if(r == 1){
       roots <- 1
     }
-    print(roots)
+    #print(roots)
     breakdowns <- breakdown(mcmc, data, old_roots = roots)
     mcmcs <- breakdowns[[1]]
     datas <- breakdowns[[2]]
-    print(breakdowns[[3]])
+    #print(breakdowns[[3]])
 
     if(noisy & length(mcmcs) > 1){
       message(paste("Parallelizing over", length(mcmcs), "cores..."))
