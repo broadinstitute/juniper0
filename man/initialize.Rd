@@ -9,19 +9,17 @@ initialize(
   n_global = 100,
   n_local = 100,
   sample_every = 100,
-  init_mst = TRUE,
+  init_mst = FALSE,
   init_ancestry = FALSE,
-  rooted = TRUE,
+  rooted = FALSE,
   N = NA,
   record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"),
   filters = NULL,
-  check_names = TRUE,
   indir = "input_data",
   a_g = 5,
   lambda_g = 1,
   a_s = 5,
   lambda_s = 1,
-  R = 2,
   psi = 0.5,
   init_mu = 2e-05,
   fixed_mu = F,
@@ -47,8 +45,6 @@ initialize(
 
 \item{filters}{Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.}
 
-\item{check_names}{If TRUE, checks whether all of the names in the FASTA match the names of the VCFs and dates.}
-
 \item{indir}{Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs. Defaults to "input_data".}
 
 \item{a_g}{Shape parameter, generation interval. Defaults to 5.}
@@ -58,8 +54,6 @@ initialize(
 \item{a_s}{Shape parameter, sojourn interval. Defaults to 5.}
 
 \item{lambda_s}{Rate parameter, sojourn interval. Defaults to 1.}
-
-\item{R}{Reproductive number (average over entire outbreak). Defaults to 2.}
 
 \item{psi}{Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.}
 
