@@ -861,6 +861,9 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     if(biassed){
       # If biassed, we first need to get each j down onto h
       # We also need to update the hastings ratio based on the number of choices for where to move j at each step, for the move in the reverse direction
+
+      # Intermediate hosts on the way down to h
+      intermediates <- integer(0)
       for (j in js) {
 
         # HASTINGS CODE: Reverses terms B2 below
@@ -871,6 +874,8 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
         hastings <- hastings + log(1 / (n_kids + 1)) # Probability we stop moving here on the way back up
 
         while(prop$h[j] != h){
+
+          intermediates <- c(intermediates, prop$h[j])
           prop <- shift(prop, data, j, prop$h[j], prop$h[prop$h[j]], F)
 
           # P(new -> old), so the factor is positive
@@ -965,7 +970,7 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
   }
 
   if(biassed){
-    to_check <- unique(c(h, i, js, mcmc$h[js]))
+    to_check <- unique(c(h, i, js, intermediates))
   }else{
     to_check <- c(h, i, js)
   }
@@ -1102,6 +1107,10 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
 
   # If biassed, we need to step up each of the js
   if(biassed){
+
+    # Intermediate hosts crossed for which we check parsimony
+    intermediates <- integer(0)
+
     for (j in js) {
       done <- FALSE
       while (!done) {
@@ -1127,6 +1136,7 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
             stop("Kid error")
           }
 
+          intermediates <- c(intermediates, kid)
           prop <- shift(prop, data, j, prop$h[j], kid, upstream = T)
         }
       }
@@ -1297,7 +1307,7 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
   }
 
   if(biassed){
-    to_check <- unique(c(h, js, prop$h[js]))
+    to_check <- unique(c(h, js, intermediates))
   }else{
     to_check <- c(h, js)
   }

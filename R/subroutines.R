@@ -882,6 +882,14 @@ accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsi
     stop("hastings error")
   }
 
+  # for (i in 1:prop$n) {
+  #   if(
+  #     any(prop$dropout[[i]] != get_dropout(prop, data, i)) | (!all(prop$dropout[[prop$h[i]]] %in% prop$dropout[[i]]))
+  #   ){
+  #     stop("Dropout updated incorrectly")
+  #   }
+  # }
+
   if(length(check_parsimony) > 0){
     for (k in check_parsimony) {
       if(
