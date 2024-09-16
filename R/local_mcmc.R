@@ -34,60 +34,62 @@ local_mcmc <- function(mcmc, data){
 
   for (r in 1:data$n_local) {
 
-    if(length(unlist(mcmc$tmu)) != length(unlist(mcmc$subs$from))){
-      print(r)
-      stop("Updated mutations wrong")
-    }
+    ## SAFETY STUFF---TURN ON WHEN MAKING CHANGES
 
-    if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-      bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
-      print(bad)
-      print(mcmc$external_roots)
-      print(mcmc$g_lik[bad])
-      print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
-      print(r)
-      print(data$rooted)
-      stop("Genomic likelihood error")
-    }
-
-    ## Check that no SNVs are listed in "dropout"
-    for (i in 1:mcmc$n) {
-      if(any(
-        mcmc$subs$pos[[i]] %in% mcmc$dropout[[i]]
-      )){
-        stop("No mutations should be listed at positions that drop out")
-      }
-    }
-
-    ## Check that "dropout" is always correct
-    for (i in 1:mcmc$n) {
-      if(
-        any(mcmc$dropout[[i]] != get_dropout(mcmc, data, i)) | (!all(mcmc$dropout[[mcmc$h[i]]] %in% mcmc$dropout[[i]]))
-      ){
-        stop("Dropout updated incorrectly")
-      }
-    }
-
-    # Check that external roots have degree 0
-    if(any(mcmc$external_roots %in% mcmc$h)){
-      stop("External roots must have degree 0")
-    }
-
-    if(mcmc$n > data$n_obs){
-      degs <- sapply((data$n_obs + 1):(mcmc$n), function(n){length(which(mcmc$h == n))})
-      if(any(degs < 2 & !((data$n_obs + 1):(mcmc$n) %in% mcmc$external_roots))){
-        print(which(degs < 2) + data$n_obs)
-        print(mcmc$external_roots)
-        print(r)
-        stop("degree error")
-      }
-    }
-
-    if(!data$observed_root & length(which(mcmc$h == 1)) < 2){
-      print(which(mcmc$h == 1))
-      print(r)
-      stop("root degree error")
-    }
+    # if(length(unlist(mcmc$tmu)) != length(unlist(mcmc$subs$from))){
+    #   print(r)
+    #   stop("Updated mutations wrong")
+    # }
+    #
+    # if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+    #   bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+    #   print(bad)
+    #   print(mcmc$external_roots)
+    #   print(mcmc$g_lik[bad])
+    #   print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
+    #   print(r)
+    #   print(data$rooted)
+    #   stop("Genomic likelihood error")
+    # }
+    #
+    # ## Check that no SNVs are listed in "dropout"
+    # for (i in 1:mcmc$n) {
+    #   if(any(
+    #     mcmc$subs$pos[[i]] %in% mcmc$dropout[[i]]
+    #   )){
+    #     stop("No mutations should be listed at positions that drop out")
+    #   }
+    # }
+    #
+    # ## Check that "dropout" is always correct
+    # for (i in 1:mcmc$n) {
+    #   if(
+    #     any(mcmc$dropout[[i]] != get_dropout(mcmc, data, i)) | (!all(mcmc$dropout[[mcmc$h[i]]] %in% mcmc$dropout[[i]]))
+    #   ){
+    #     stop("Dropout updated incorrectly")
+    #   }
+    # }
+    #
+    # # Check that external roots have degree 0
+    # if(any(mcmc$external_roots %in% mcmc$h)){
+    #   stop("External roots must have degree 0")
+    # }
+    #
+    # if(mcmc$n > data$n_obs){
+    #   degs <- sapply((data$n_obs + 1):(mcmc$n), function(n){length(which(mcmc$h == n))})
+    #   if(any(degs < 2 & !((data$n_obs + 1):(mcmc$n) %in% mcmc$external_roots))){
+    #     print(which(degs < 2) + data$n_obs)
+    #     print(mcmc$external_roots)
+    #     print(r)
+    #     stop("degree error")
+    #   }
+    # }
+    #
+    # if(!data$observed_root & length(which(mcmc$h == 1)) < 2){
+    #   print(which(mcmc$h == 1))
+    #   print(r)
+    #   stop("root degree error")
+    # }
 
 
 

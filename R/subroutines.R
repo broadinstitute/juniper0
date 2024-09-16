@@ -495,10 +495,13 @@ rseq <- function(w, min_t, max_t, mcmc){
   }
 
   ## FOR NOW: just sorted uniform draw
-  return(sort(runif(w, min_t, max_t), decreasing = T))
+  #return(sort(runif(w, min_t, max_t), decreasing = T))
 
-  # draw <- cumsum(rgamma(w + 1, shape = mcmc$a_g, rate = mcmc$lambda_g))
-  # return(rev(draw / draw[length(draw)])[-1] * (max_t - min_t) + min_t)
+  draw <- extraDistr::rdirichlet(1, rep(mcmc$a_g / mcmc$lambda_g, w + 1))[1,]
+  draw <- cumsum(draw[1:(length(draw) - 1)])
+  draw <- draw * (max_t - min_t) + min_t
+
+  return(rev(draw))
 
 }
 
@@ -515,27 +518,19 @@ dseq <- function(seq, w, min_t, max_t, mcmc){
   }
 
   ## FOR NOW: just sorted uniform density
-  return(lfactorial(w) + w * log(1 / (max_t - min_t)))
+  #return(lfactorial(w) + w * log(1 / (max_t - min_t)))
 
-  # # Record max_t - min_t, for change of density
-  # delta_t <- max_t - min_t
-  #
-  # for (i in 1:w) {
-  #   # Get the fraction of the remaining interval max_t - min_t taken up by seq[i], going back in time
-  #   #print((max_t - seq[i]))
-  #   #print(max_t - min_t)
-  #   frac <- (max_t - seq[i]) / (max_t - min_t)
-  #
-  #   # This is the ratio of a single Gamma(a_g, lambda_g) draw divided by itself plus another w - i + 1 i.i.d. Gammas
-  #   # Hence the ratio is Beta(a_g, a_g * (w - i + 1))
-  #   # Final term is change of variables
-  #   out <- out + dbeta(frac, mcmc$a_g, mcmc$a_g * (w - i + 1), log = T) + log(delta_t / (max_t - min_t))
-  #
-  #   # Finally we reset max_t to be seq[i], so that we calculate the remainder of the interval for next iteration in loop
-  #   max_t <- seq[i]
-  # }
-  #
-  # return(out)
+  # Record max_t - min_t, for change of density
+  delta_t <- max_t - min_t
+
+  seq <- rev((seq - min_t) / (max_t - min_t))
+  seq <- diff(c(0,seq))
+  seq <- c(seq, 1 - sum(seq))
+
+  return(
+    extraDistr::ddirichlet(seq, rep(mcmc$a_g / mcmc$lambda_g, w + 1), log = T) + w * log(1 / (max_t - min_t))
+  )
+
 }
 
 ## Draw from density that's uniform above 0 to max_delta, exponential below 0 with conditional mean mu_delta, and such that the PDF is continuous on (-Inf, max_delta)
@@ -1002,21 +997,29 @@ chop <- function(mcmc, data, old_roots){
   return(list(roots, trees))
 }
 
-## For debugging: consensus changes from root
-cc_from_root <- function(mcmc, i){
-  if(i == 1){
-    return(0)
-  }else{
-    anc <- ancestry(mcmc$h, i)
-    count <- 0
-    for (j in anc[2:length(anc)]) {
-      count <- count + length(mcmc$m01[[j]]) + length(mcmc$mx1[[j]]) - length(mcmc$m10[[j]]) - length(mcmc$m1y[[j]])
+## For debugging: infer mu just based on isnv data
+infer_mu_from_isnvs <- function(mcmc, data){
+  mus <- mcmc$mu
+  for (r in 2:1000) {
+    prop <- mcmc
+    prop$mu <- mcmc$mu + rnorm(1, 0, 2e-6)
+    prop$g_lik <- sapply(1:prop$n, g_lik, mcmc = prop, data = data)
+    if(log(runif(1)) < sum(prop$g_lik) - sum(mcmc$g_lik)){
+      mcmc <- prop
     }
-    return(count)
+    mus <- c(mus, mcmc$mu)
   }
+  return(mus)
 }
 
+# Extinction probability objective to minimize
+obj_ext <- function(x, rho, psi){
+  (log(x) - rho * (log(psi) - log(1 - (1-psi) * x)))^2
+}
 
+p_ext <- function(rho, psi){
+  optim(1e-5, obj_ext, method = "Brent", rho=rho, psi=psi, lower = 0, upper = 1)$par
+}
 
 
 

@@ -78,7 +78,7 @@ e_lik <- function(mcmc, data, noisy = F){
     return(
       prob_JC + TransPhylo::probTTree(
         ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
-      ) - correction
+      ) - correction - rho # Prior on rho is Expo(1)
     )
 }
 

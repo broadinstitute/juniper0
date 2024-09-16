@@ -342,13 +342,13 @@ initialize <- function(
     data$snvs[[i]]$snv <- NULL
   }
 
-  print(length(unlist(mcmc$subs$from)))
+  #print(length(unlist(mcmc$subs$from)))
 
   if(!data$rooted){
     mcmc <- genotype(mcmc, data, 1)[[1]]
   }
 
-  print(length(unlist(mcmc$subs$from)))
+  #print(length(unlist(mcmc$subs$from)))
 
   ## Check that no SNVs are listed in "dropout"
   for (i in 1:n) {
