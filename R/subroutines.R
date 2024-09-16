@@ -890,6 +890,15 @@ accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsi
   #   }
   # }
 
+  ## Check that no SNVs are listed in "dropout"
+  for (i in 1:prop$n) {
+    if(any(
+      prop$subs$pos[[i]] %in% prop$dropout[[i]]
+    )){
+      stop("No mutations should be listed at positions that drop out")
+    }
+  }
+
   if(length(check_parsimony) > 0){
     for (k in check_parsimony) {
       if(
