@@ -539,7 +539,7 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = c(h_old, h_new, i, js)))
+  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = unique(c(down, up, i, js))))
 
 }
 
