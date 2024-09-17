@@ -899,6 +899,16 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     }
   }
 
+  # For each j, the above may introduce mutations at dropout sites.
+  # Correct this here
+  for (j in js) {
+    keep <- which(!(prop$subs$pos[[j]] %in% prop$dropout[[j]]))
+    prop$subs$from[[j]] <- prop$subs$from[[j]][keep]
+    prop$subs$pos[[j]] <- prop$subs$pos[[j]][keep]
+    prop$subs$to[[j]] <- prop$subs$to[[j]][keep]
+  }
+
+
   # If unobserved root and has degree 1, reject
   # Can be made more efficient by rejecting earlier
   if(length(which(prop$h == 1)) < 2 & !data$observed_root){
@@ -925,7 +935,7 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
 
   # Finally, resample seq for j. Also fix latest host, so we don't have to update g_lik for children of j
   for (j in js) {
-    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = FALSE)
+    prop <- resample_seq(prop, data, j, fix_latest_host = TRUE, also_resample_tmu = FALSE) # The tmu for each j will be updated below
     # Terms 7
     hastings <- hastings - prop[[3]]
     prop <- prop[[1]]
@@ -1070,6 +1080,16 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
     }
     prop <- shift(prop, data, j1, i, h, upstream = F)
 
+  }
+
+  # For each j, the above may introduce mutations at dropout sites.
+  # Correct this here
+  # Idea being we keep the genotype in each j the same, except in dropout sites, where it (of course) matches the ancestor's genotype
+  for (j in js) {
+    keep <- which(!(prop$subs$pos[[j]] %in% prop$dropout[[j]]))
+    prop$subs$from[[j]] <- prop$subs$from[[j]][keep]
+    prop$subs$pos[[j]] <- prop$subs$pos[[j]][keep]
+    prop$subs$to[[j]] <- prop$subs$to[[j]][keep]
   }
 
   ## Re-indexing: everyone above i steps down 1, i gets deleted
