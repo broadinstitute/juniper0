@@ -223,7 +223,20 @@ get_ts <- function(mcmc, data, i){
 
 # Get total evolutionary time
 evo_time <- function(i, mcmc, data){
-  (mcmc$seq[[i]][1] - mcmc$seq[[mcmc$h[i]]][1]) * (data$n_bases - length(mcmc$dropout[[i]]))
+  # If unrooted and i is the only child of the root and i is unobserved, no contribution
+  if(!data$rooted){
+    if(i > data$n_obs){
+      if(mcmc$h[i] == 1){
+        if(length(which(mcmc$h == 1)) == 1){
+          return(0)
+        }
+      }
+    }
+  }
+
+  return(
+    (mcmc$seq[[i]][1] - mcmc$seq[[mcmc$h[i]]][1]) * (data$n_bases - length(mcmc$dropout[[i]]))
+  )
 }
 
 tot_evo_time <- function(mcmc, data){
