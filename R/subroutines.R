@@ -110,14 +110,21 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
         stop("???")
       }
 
+      # Multiallelic case: mask alleles that aren't in the top 2 frequencies
+      if(length(nonzero) > 2){
+        # Get the indices of props going from biggest to smallest
+        allele_ord <- sort.int(props, decreasing = T, index.return = T)$ix
+        nonzero <- allele_ord[1:2]
+      }
+
       out$isnv$a1 <- c(out$isnv$a1, c("A", "C", "G", "T")[nonzero[1]])
       out$isnv$a2 <- c(out$isnv$a2, c("A", "C", "G", "T")[nonzero[2]])
       out$isnv$af1 <- c(out$isnv$af1, props[nonzero[1]])
 
-      if(sum(props > 0) > 2){
-        print("Triallelic")
-        print(props)
-      }
+      # if(sum(props > 0) > 2){
+      #   print("Triallelic")
+      #   print(props)
+      # }
     }
   }
 
