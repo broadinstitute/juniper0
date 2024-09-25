@@ -163,7 +163,9 @@ initialize <- function(
     if(length(who) == 1){
       vcf <- read.delim(
         paste0("./", indir, "/vcf/", vcfs[who]),
-        colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character")
+        colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character"),
+        comment.char = "#",
+        header = F
       )
       colnames(vcf) <- paste0("V", 1:ncol(vcf))
       snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
