@@ -45,6 +45,28 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
   # List output: list of SNVs, iSNVs, and positions with no information
   out <- list()
 
+  out$snv <- list()
+
+  ## Get SNVs from FASTA
+  snv_pos <- which(
+    seq1 != seq2 &
+      seq1 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)) &
+      seq2 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24))
+  )
+
+  ## Get missing sites from FASTA in seq2
+  missing_pos <- which(
+    !(seq2 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
+  )
+
+  old <- raw_to_base(seq1[snv_pos])
+  new <- raw_to_base(seq2[snv_pos])
+
+  out$snv$from <- old
+  out$snv$pos <- snv_pos
+  out$snv$to <- new
+  out$missing <- missing_pos
+
   ## Get iSNVs from VCF, if provided
   if(!is.null(vcf)){
 
@@ -77,6 +99,7 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
 
     # Which sites pass the filters?
     keep <- which(dp >= filters$dp & sb < filters$sb & af >= filters$af & af <= 1 - filters$af & !(pos %in% filters$common))
+    keep <- setdiff(keep, missing_pos) # If it's missing according to the FASTA, mask it in the VCF
     pos <- pos[keep]
     ref <- ref[keep]
     alt <- alt[keep]
@@ -128,27 +151,7 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
     }
   }
 
-  out$snv <- list()
 
-  ## Get SNVs from FASTA
-  snv_pos <- which(
-    seq1 != seq2 &
-      seq1 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)) &
-      seq2 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24))
-  )
-
-  ## Get missing sites from FASTA in seq2
-  missing_pos <- which(
-    !(seq2 %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
-  )
-
-  old <- raw_to_base(seq1[snv_pos])
-  new <- raw_to_base(seq2[snv_pos])
-
-  out$snv$from <- old
-  out$snv$pos <- snv_pos
-  out$snv$to <- new
-  out$missing <- missing_pos
 
   if(any(out$isnv$pos %in% out$missing)){
     stop("There are sites reported as missing in the FASTA and non-missing in the corresponding VCF")
