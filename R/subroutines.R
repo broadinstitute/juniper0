@@ -98,8 +98,7 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
     sb <- as.numeric(sb)
 
     # Which sites pass the filters?
-    keep <- which(dp >= filters$dp & sb < filters$sb & af >= filters$af & af <= 1 - filters$af & !(pos %in% filters$common))
-    keep <- setdiff(keep, missing_pos) # If it's missing according to the FASTA, mask it in the VCF
+    keep <- which(dp >= filters$dp & sb < filters$sb & af >= filters$af & af <= 1 - filters$af & !(pos %in% filters$common) & !(pos %in% missing_pos))
     pos <- pos[keep]
     ref <- ref[keep]
     alt <- alt[keep]
