@@ -28,7 +28,7 @@
 #' @param noisy Whether to plot the current state of the Markov Chain at each iteration, as well as print the current log-likelihood, substitution rate, and mutation rate.
 #' @return The MCMC output.
 #' @export
-run_mcmc <- function(init, noisy = F, logging = F){
+run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
   mcmc <- init[[1]]
   data <- init[[2]]
 
@@ -106,9 +106,13 @@ run_mcmc <- function(init, noisy = F, logging = F){
 
     #print(mcmc$dropout)
 
+    if(plotting){
+      print(plot_network(list(mcmc, data)))
+    }
+
     if(noisy){
       message(paste(r, "global iterations complete. Log-likelihood =", round(liks[r], 2)))
-      print(plot_network(list(mcmc, data)))
+
       #print(mcmc$w)
        print(
          paste0(
