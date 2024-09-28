@@ -552,7 +552,7 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = unique(c(down, up, i, js))))
+  return(accept_or_reject(prop, mcmc, data, update, update, unique(c(update, down, up, js)), hastings, check_parsimony = unique(c(down, up, i, js))))
 
 }
 
@@ -1009,7 +1009,7 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     to_check <- c(h, i, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = to_check))
+  return(accept_or_reject(prop, mcmc, data, update, update, unique(c(update, to_check)), hastings, check_parsimony = to_check))
 }
 
 # upstream = T here reverses move_create(... upstream = T) and vice versa
@@ -1363,5 +1363,5 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
     to_check <- c(h, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = to_check))
+  return(accept_or_reject(prop, mcmc, data, update, update, unique(c(update, to_check)), hastings, check_parsimony = to_check))
 }

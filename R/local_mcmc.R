@@ -41,39 +41,39 @@ local_mcmc <- function(mcmc, data){
     #   stop("Updated mutations wrong")
     # }
     #
-    # if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-    #   bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
-    #   print(bad)
-    #   print(mcmc$external_roots)
-    #   print(mcmc$g_lik[bad])
-    #   print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
-    #   print(r)
-    #   print(data$rooted)
-    #   stop("Genomic likelihood error")
-    # }
-    #
-    #
-    # if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
-    #   bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
-    #   print(bad)
-    #   print(mcmc$external_roots)
-    #   print(mcmc$e_lik[bad])
-    #   print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
-    #   print(r)
-    #   print(data$rooted)
-    #   stop("e likelihood error")
-    # }
-    #
-    # if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
-    #   bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
-    #   print(bad)
-    #   print(mcmc$external_roots)
-    #   print(mcmc$m_lik[bad])
-    #   print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
-    #   print(r)
-    #   print(data$rooted)
-    #   stop("m likelihood error")
-    # }
+    if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$g_lik[bad])
+      print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
+      print(r)
+      print(data$rooted)
+      stop("Genomic likelihood error")
+    }
+
+
+    if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$e_lik[bad])
+      print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
+      print(r)
+      print(data$rooted)
+      stop("e likelihood error")
+    }
+
+    if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$m_lik[bad])
+      print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
+      print(r)
+      print(data$rooted)
+      stop("m likelihood error")
+    }
 
     # if(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)) > 1e-6){
     #   print(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)))
