@@ -899,7 +899,7 @@ snv_status <- function(mcmc, i, js, snv){
 }
 
 # Accept / reject
-accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsimony = integer(0), noisy = FALSE){
+accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, hastings = 0, check_parsimony = integer(0), noisy = FALSE){
   if(is.infinite(hastings)){
     stop("hastings error")
   }
@@ -911,6 +911,8 @@ accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsi
   #     stop("Dropout updated incorrectly")
   #   }
   # }
+
+
 
 
 
@@ -934,12 +936,33 @@ accept_or_reject <- function(prop, mcmc, data, update, hastings = 0, check_parsi
   #   }
   # }
 
-  prop$e_lik <- e_lik(prop, data)
-  prop$g_lik[update] <- sapply(update, g_lik, mcmc = prop, data = data)
+  if(length(update_e) > 0){
+    prop$e_lik[update_e] <- sapply(update_e, e_lik_personal, mcmc = prop, data = data)
+  }
+
+  if(length(update_g) > 0){
+    prop$g_lik[update_g] <- sapply(update_g, g_lik, mcmc = prop, data = data)
+  }
+
+  if(length(update_m) > 0){
+    prop$m_lik[update_m] <- sapply(update_m, m_lik, mcmc = prop, data = data)
+  }
+
   prop$prior <- prior(prop)
 
   # Accept / reject
-  if(log(runif(1)) < prop$e_lik + sum(prop$g_lik) + prop$prior - mcmc$e_lik - sum(mcmc$g_lik) - mcmc$prior + hastings){
+  if(
+    log(runif(1)) <
+    sum(prop$e_lik) +
+    sum(prop$g_lik) +
+    sum(prop$m_lik) +
+    prop$prior -
+    sum(mcmc$e_lik) -
+    sum(mcmc$g_lik) -
+    sum(mcmc$m_lik) -
+    mcmc$prior +
+    hastings
+  ){
     if(noisy){
       print("Move accepted")
     }
@@ -1062,6 +1085,7 @@ obj_ext <- function(x, rho, psi){
 p_ext <- function(rho, psi){
   optim(1e-5, obj_ext, method = "Brent", rho=rho, psi=psi, lower = 0, upper = 1)$par
 }
+
 
 
 

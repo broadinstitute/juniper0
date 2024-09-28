@@ -92,7 +92,7 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
 
     #print(r)
 
-    liks <- c(liks, mcmc$e_lik + sum(mcmc$g_lik[2:mcmc$n]) + mcmc$prior)
+    liks <- c(liks, sum(mcmc$e_lik) + sum(mcmc$g_lik) + sum(mcmc$m_lik) + mcmc$prior)
 
     ## Safety mode: check dropout
     ## Check that no SNVs are listed in "dropout"

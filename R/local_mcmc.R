@@ -52,6 +52,38 @@ local_mcmc <- function(mcmc, data){
     #   stop("Genomic likelihood error")
     # }
     #
+    #
+    # if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
+    #   bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
+    #   print(bad)
+    #   print(mcmc$external_roots)
+    #   print(mcmc$e_lik[bad])
+    #   print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
+    #   print(r)
+    #   print(data$rooted)
+    #   stop("e likelihood error")
+    # }
+    #
+    # if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
+    #   bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
+    #   print(bad)
+    #   print(mcmc$external_roots)
+    #   print(mcmc$m_lik[bad])
+    #   print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
+    #   print(r)
+    #   print(data$rooted)
+    #   stop("m likelihood error")
+    # }
+
+    # if(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)) > 1e-6){
+    #   print(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)))
+    #   print(sum(mcmc$m_lik + mcmc$e_lik), digits = 20)
+    #   print(e_lik(mcmc, data), digits = 20)
+    #   print(mcmc$e_lik[mcmc$external_roots])
+    #   stop("disagreement error")
+    # }
+
+    #
     # ## Check that no SNVs are listed in "dropout"
     # for (i in 1:mcmc$n) {
     #   if(any(
@@ -70,10 +102,10 @@ local_mcmc <- function(mcmc, data){
     #   }
     # }
     #
-    # # Check that external roots have degree 0
-    # if(any(mcmc$external_roots %in% mcmc$h)){
-    #   stop("External roots must have degree 0")
-    # }
+    # Check that external roots have degree 0
+    if(any(mcmc$external_roots %in% mcmc$h)){
+      stop("External roots must have degree 0")
+    }
     #
     # if(mcmc$n > data$n_obs){
     #   degs <- sapply((data$n_obs + 1):(mcmc$n), function(n){length(which(mcmc$h == n))})
@@ -281,12 +313,13 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       mcmc$tmu <- mcmc$tmu[1:mcmc$n]
       mcmc$bot <- mcmc$bot[1:mcmc$n]
       mcmc$dropout <- mcmc$dropout[1:mcmc$n]
-      mcmc$g_lik <- mcmc$g_lik[1:mcmc$n]
+
       mcmc$root <- NULL
       mcmc$cluster <- NULL
 
-      mcmc$e_lik <- 0
+      mcmc$e_lik <- rep(0, mcmc$n)
       mcmc$g_lik <- rep(0, mcmc$n)
+      mcmc$m_lik <- rep(0, mcmc$n)
 
       # Update all entries of mcmc for each cluster (plus roots of upstream clusters)
       for (j in 1:n_subtrees) {
@@ -309,14 +342,26 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
         mcmc$bot[mappings[[j]]] <- all_res[[j]][[i]]$bot
         mcmc$dropout[mappings[[j]]] <- all_res[[j]][[i]]$dropout
 
-        ## Fix this at external roots: g_lik determined at upstream cluster
+        # For nodes in two clusters, one likelihood is always 0, so this is OK
+        mcmc$e_lik[mappings[[j]]] <- mcmc$e_lik[mappings[[j]]] + all_res[[j]][[i]]$e_lik
         mcmc$g_lik[mappings[[j]]] <- mcmc$g_lik[mappings[[j]]] + all_res[[j]][[i]]$g_lik
+        mcmc$m_lik[mappings[[j]]] <- mcmc$m_lik[mappings[[j]]] + all_res[[j]][[i]]$m_lik
 
-        mcmc$e_lik <- mcmc$e_lik + all_res[[j]][[i]]$e_lik
+
 
         if(i == n_samples){
           new_roots <- c(new_roots, mappings[[j]][1])
         }
+
+      }
+
+      if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
+        bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
+        print(bad)
+        print(mcmc$external_roots)
+        print(mcmc$e_lik[bad])
+        print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
+        stop("e likelihood error in amalgamate")
       }
 
 
@@ -327,11 +372,11 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
 
       res[[i]] <- mcmc
 
-      if(abs(mcmc$e_lik - e_lik(mcmc, data)) > 0.01){
-        print(mcmc$e_lik, digits = 20)
-        print(e_lik(mcmc, data), digits = 20)
-        stop("e_lik error in amalgamate")
-      }
+      # if(abs(mcmc$e_lik - e_lik(mcmc, data)) > 0.01){
+      #   print(mcmc$e_lik, digits = 20)
+      #   print(e_lik(mcmc, data), digits = 20)
+      #   stop("e_lik error in amalgamate")
+      # }
 
       if(any(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
 

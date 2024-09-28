@@ -33,7 +33,6 @@ initialize <- function(
     N = NA, # Population size
     record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"), # Which aspects of mcmc do we want to record
     filters = NULL,
-    # If FALSE, all names must match exactly, with names of VCFs being the same as the names on the FASTA, plus the .vcf suffix
     indir = "input_data", # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
     a_g = 5, # Shape parameter, generation interval
     lambda_g = 1, # Rate parameter, generation interval
@@ -161,13 +160,32 @@ initialize <- function(
     # Locate the correct vcf file
     who <- which(vcfs_prefix == names[i])
     if(length(who) == 1){
-      vcf <- read.delim(
-        paste0("./", indir, "/vcf/", vcfs[who]),
-        colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character"),
-        comment.char = "#",
-        header = F
+      # First see if there are any lines to read
+      test <- readLines(
+        paste0("./", indir, "/vcf/", vcfs[who])
       )
-      colnames(vcf) <- paste0("V", 1:ncol(vcf))
+      test <- substring(test, 1, 1)
+      if(all(test == "#")){
+        vcf <- data.frame(
+          V1 = character(0),
+          V2 = integer(0),
+          V3 = character(0),
+          V4 = character(0),
+          V5 = character(0),
+          V6 = character(0),
+          V7 = character(0),
+          V8 = character(0)
+        )
+      }else{
+        vcf <- read.delim(
+          paste0("./", indir, "/vcf/", vcfs[who]),
+          colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character"),
+          comment.char = "#",
+          header = F
+        )
+        colnames(vcf) <- paste0("V", 1:ncol(vcf))
+      }
+
       snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
       vcf_present[i] <- TRUE
     }else{
@@ -298,7 +316,7 @@ initialize <- function(
   #vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
   #print(vals)
 
-  mcmc$R <- 2
+  mcmc$R <- 1
   mcmc$pi <- 0.5
 
   #mcmc$R <- vals[1] # Reproductive number
@@ -363,8 +381,9 @@ initialize <- function(
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes
-  mcmc$e_lik <- e_lik(mcmc, data)
+  mcmc$e_lik <- sapply(1:n, e_lik_personal, mcmc = mcmc, data = data)
   mcmc$g_lik <- sapply(1:n, g_lik, mcmc = mcmc, data = data)
+  mcmc$m_lik <- sapply(1:n, m_lik, mcmc = mcmc, data = data)
   mcmc$prior <- prior(mcmc)
 
   return(list(mcmc, data))

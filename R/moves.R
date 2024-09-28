@@ -28,14 +28,16 @@
 move_seq <- function(mcmc, data, also_resample_tmu){
   # Choose random host with ancestor
   i <- sample(2:mcmc$n, 1)
-  update <- mcmc$h[i]
+  update_e <- mcmc$h[i]
+  update_g <- mcmc$h[i]
+  update_m <- integer(0)
 
   prop <- resample_seq(mcmc, data, i, fix_latest_host = TRUE, also_resample_tmu = also_resample_tmu)
 
   hastings <- prop[[2]] - prop[[3]]
   prop <- prop[[1]]
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings))
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, hastings))
 
 }
 
@@ -48,9 +50,11 @@ move_tmu <- function(mcmc, data){
   hastings <- prop[[2]] - prop[[3]]
   prop <- prop[[1]]
 
-  update <- mcmc$h[i]
+  update_g <- mcmc$h[i]
+  update_e <- integer(0)
+  update_m <- integer(0)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings))
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, hastings))
 }
 
 
@@ -179,11 +183,13 @@ move_w_t <- function(mcmc, data, recursive = F){
     if(!is.na(h)){
       update <- c(update, h)
     }
+  }else{
+    update <- unique(c(1, update))
   }
 
-  update <- c(1, update)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings))
+
+  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings))
 }
 
 ## Update b using a N(0,0.01) proposal density
@@ -194,8 +200,10 @@ move_pi <- function(mcmc, data){
   if(prop$pi <= 0 | prop$pi >= 1){
     return(mcmc)
   }else{
-    update <- 2:mcmc$n
-    return(accept_or_reject(prop, mcmc, data, update))
+    update_e <- 1:mcmc$n
+    update_g <- integer(0)
+    update_m <- integer(0)
+    return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
   }
 }
 
@@ -204,8 +212,10 @@ move_mu <- function(mcmc, data){
   prop <- mcmc
   prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 10)
 
-  update <- 2:mcmc$n
-  return(accept_or_reject(prop, mcmc, data, update))
+  update_e <- integer(0)
+  update_g <- 1:mcmc$n
+  update_m <- 1:mcmc$n
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 }
 
 ## Update p
@@ -214,8 +224,8 @@ move_N_eff <- function(mcmc, data){
   prop <- mcmc
   prop$N_eff <- rnorm(1, mcmc$N_eff, 0.5)
 
-  update <- 2:mcmc$n
-  return(accept_or_reject(prop, mcmc, data, update))
+  update <- 1:mcmc$n
+  return(accept_or_reject(prop, mcmc, data, update, update, update))
 }
 
 ## Update R
@@ -225,16 +235,14 @@ move_R <- function(mcmc, data){
   prop$R <- rnorm(1, mcmc$R, 0.1)
   if(prop$R <= 0){
     return(mcmc)
-  }else{
-    prop$e_lik <- e_lik(prop, data)
-    prop$prior <- prior(prop)
-
-    if(log(runif(1)) < prop$e_lik + prop$prior - mcmc$e_lik - mcmc$prior){
-      return(prop)
-    }else{
-      return(mcmc)
-    }
   }
+
+  update_e <- 1:mcmc$n
+  update_g <- integer(0)
+  update_m <- integer(0)
+
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
+
 }
 
 ## Update psi using a N(0,0.1) proposal density
@@ -242,14 +250,15 @@ move_psi <- function(mcmc, data){
   # Proposal
   prop <- mcmc
   prop$psi <- rnorm(1, mcmc$psi, 0.1)
-  prop$e_lik <- e_lik(prop, data)
-  prop$prior <- prior(prop)
 
-  if(log(runif(1)) < prop$e_lik + prop$prior - mcmc$e_lik - mcmc$prior){
-    return(prop)
-  }else{
+  if(prop$psi < 0 | prop$psi > 1){
     return(mcmc)
   }
+
+  update_e <- 1:mcmc$n
+  update_g <- integer(0)
+  update_m <- integer(0)
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 }
 
 ## Update genotype at (a) missing sites in observed host, or (b) all sites in unobserved host, based on parsimony
@@ -293,7 +302,11 @@ move_genotype <- function(mcmc, data){
     to_check <- c(mcmc$h[i], i, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
+  update_e <- integer(0)
+  update_g <- update
+  update_m <- update
+
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, hastings, check_parsimony = to_check))
 }
 
 ### Topological moves
@@ -426,7 +439,7 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings = hastings, check_parsimony = c(h_old, h_new, i, js)))
+  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings = hastings, check_parsimony = c(h_old, h_new, i, js)))
 }
 
 ## Global change in ancestor
@@ -539,7 +552,7 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = unique(c(down, up, i, js))))
+  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = unique(c(down, up, i, js))))
 
 }
 
@@ -613,11 +626,16 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
 
 
   check_timing <- c(i, j, children_i, children_j) # For which hosts must we update the genomic likelihood?
+  check_timing_obs <- check_timing[which(check_timing <= data$n_obs)]
 
   prop_ts <- sapply(prop$seq[check_timing], function(v){v[length(v)]})
   prop_ts_anc <- sapply(prop$seq[prop$h[check_timing]], function(v){v[1]})
 
   if(any(prop_ts <= prop_ts_anc)){
+    return(mcmc)
+  }
+
+  if(any(sapply(prop$seq[check_timing_obs], function(v){v[1]}) >= data$s[check_timing_obs])){
     return(mcmc)
   }
 
@@ -637,7 +655,13 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
 
   update <- c(h, i, j)
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
+  # print(which(prop$h == 11))
+  # print(prop$h[11])
+  # print(prop$seq[[11]])
+  # print(prop$seq[[prop$h[11]]])
+  # print(prop$seq[which(prop$h == 11)])
+
+  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = to_check))
 
 }
 
@@ -985,7 +1009,7 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     to_check <- c(h, i, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
+  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = to_check))
 }
 
 # upstream = T here reverses move_create(... upstream = T) and vice versa
@@ -1107,7 +1131,9 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
 
   # "$bot" does not exist for unobserved hosts
 
+  prop$e_lik <- prop$e_lik[-i]
   prop$g_lik <- prop$g_lik[-i]
+  prop$m_lik <- prop$m_lik[-i]
   prop$external_roots[which(prop$external_roots > i)] <- prop$external_roots[which(prop$external_roots > i)] - 1
 
   # Update the js
@@ -1180,6 +1206,11 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
   # If unobserved root and has degree 1, reject
   # Can be made more efficient by rejecting earlier
   if(length(which(prop$h == 1)) < 2 & !data$observed_root){
+    return(mcmc)
+  }
+
+  # If external root has degree >0, reject
+  if(any(prop$external_roots %in% prop$h)){
     return(mcmc)
   }
 
@@ -1332,5 +1363,5 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
     to_check <- c(h, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, hastings, check_parsimony = to_check))
+  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = to_check))
 }

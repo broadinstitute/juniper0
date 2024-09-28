@@ -110,13 +110,17 @@ breakdown <- function(mcmc, data, old_roots){
     mcmcs[[i]]$dropout <- mcmcs[[i]]$dropout[joined]
     mcmcs[[i]]$bot <- mcmcs[[i]]$bot[joined] # May contain some NAs, check if this causes issues
 
+    mcmcs[[i]]$e_lik <- mcmcs[[i]]$e_lik[joined]
     mcmcs[[i]]$g_lik <- mcmcs[[i]]$g_lik[joined]
+    mcmcs[[i]]$m_lik <- mcmcs[[i]]$m_lik[joined]
 
     # The roots of external clusters have been relabeled
     mcmcs[[i]]$external_roots <- match(mcmcs[[i]]$external_roots, joined)
 
-    # Genomic likelihood at external roots resets to 0
+    # Each likelihood at external roots resets to 0
+    mcmcs[[i]]$e_lik[mcmcs[[i]]$external_roots] <- 0
     mcmcs[[i]]$g_lik[mcmcs[[i]]$external_roots] <- 0
+    mcmcs[[i]]$m_lik[mcmcs[[i]]$external_roots] <- 0
 
     datas[[i]] <- data
     datas[[i]]$s <- datas[[i]]$s[joined]
@@ -141,10 +145,10 @@ breakdown <- function(mcmc, data, old_roots){
     }
 
     # e_lik needs to be re-computed based on the smaller set
-    mcmcs[[i]]$e_lik <- e_lik(mcmcs[[i]], datas[[i]])
-    if(is.infinite(mcmcs[[i]]$e_lik)){
-      stop("e_lik error in breakdown")
-    }
+    # mcmcs[[i]]$e_lik <- e_lik(mcmcs[[i]], datas[[i]])
+    # if(is.infinite(mcmcs[[i]]$e_lik)){
+    #   stop("e_lik error in breakdown")
+    # }
 
     if(any(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))){
 

@@ -24,7 +24,10 @@
 
 prior <- function(mcmc){
 
-  return(0)
+  # 1st param in NBin offspring distribution
+  rho <- mcmc$R * mcmc$psi / (1 - mcmc$psi)
+
+  return(-rho) # Exponential(1) prior on rho
 
 }
 
