@@ -34,6 +34,8 @@ local_mcmc <- function(mcmc, data){
 
   for (r in 1:data$n_local) {
 
+    print(r)
+
     ## SAFETY STUFF---TURN ON WHEN MAKING CHANGES
 
     # if(length(unlist(mcmc$tmu)) != length(unlist(mcmc$subs$from))){
@@ -41,39 +43,39 @@ local_mcmc <- function(mcmc, data){
     #   stop("Updated mutations wrong")
     # }
     #
-    if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-      bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
-      print(bad)
-      print(mcmc$external_roots)
-      print(mcmc$g_lik[bad])
-      print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
-      print(r)
-      print(data$rooted)
-      stop("Genomic likelihood error")
-    }
-
-
-    if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
-      bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
-      print(bad)
-      print(mcmc$external_roots)
-      print(mcmc$e_lik[bad])
-      print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
-      print(r)
-      print(data$rooted)
-      stop("e likelihood error")
-    }
-
-    if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
-      bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
-      print(bad)
-      print(mcmc$external_roots)
-      print(mcmc$m_lik[bad])
-      print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
-      print(r)
-      print(data$rooted)
-      stop("m likelihood error")
-    }
+    # if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+    #   bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+    #   print(bad)
+    #   print(mcmc$external_roots)
+    #   print(mcmc$g_lik[bad])
+    #   print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
+    #   print(r)
+    #   print(data$rooted)
+    #   stop("Genomic likelihood error")
+    # }
+    #
+    #
+    # if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
+    #   bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
+    #   print(bad)
+    #   print(mcmc$external_roots)
+    #   print(mcmc$e_lik[bad])
+    #   print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
+    #   print(r)
+    #   print(data$rooted)
+    #   stop("e likelihood error")
+    # }
+    #
+    # if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
+    #   bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
+    #   print(bad)
+    #   print(mcmc$external_roots)
+    #   print(mcmc$m_lik[bad])
+    #   print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
+    #   print(r)
+    #   print(data$rooted)
+    #   stop("m likelihood error")
+    # }
 
     # if(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)) > 1e-6){
     #   print(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)))
@@ -140,6 +142,9 @@ local_mcmc <- function(mcmc, data){
 
     mcmc <- move_w_t(mcmc, data, recursive = T)
 
+    # Move 23
+    mcmc <- move_genotype(mcmc, data)
+
 
 
     if(runif(1) < 1/2){
@@ -151,13 +156,10 @@ local_mcmc <- function(mcmc, data){
     }
 
     # Move 20
+    mcmc <- move_h_global(mcmc, data, biassed = F)
     mcmc <- move_h_global(mcmc, data)
 
 
-
-
-
-    mcmc <- move_h_global(mcmc, data, biassed = F)
 
 
 
@@ -167,20 +169,6 @@ local_mcmc <- function(mcmc, data){
     # Move 22
     mcmc <- move_swap(mcmc, data, exchange_children = T)
 
-
-
-    # Move 23
-    mcmc <- move_genotype(mcmc, data)
-
-
-
-    # if(87 > data$n_obs & length(which(mcmc$h == 87)) < 2 & 87 <= mcmc$n){
-    #   print(data$n_obs)
-    #   print(mcmc$external_roots)
-    #   print(which(mcmc$h == 88))
-    #   print(r)
-    #   stop("degree issue")
-    # }
 
     if(runif(1) < 1/2){
       # Move 24

@@ -388,3 +388,8 @@ initialize <- function(
 
   return(list(mcmc, data))
 }
+
+
+
+
+
