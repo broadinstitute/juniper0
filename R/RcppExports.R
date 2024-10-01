@@ -2,22 +2,22 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 log_sum_exp <- function(u, v) {
-    .Call('_juniper0_log_sum_exp', PACKAGE = 'juniper0', u, v)
+    .Call(`_juniper0_log_sum_exp`, u, v)
 }
 
 log_subtract_exp <- function(u, v) {
-    .Call('_juniper0_log_subtract_exp', PACKAGE = 'juniper0', u, v)
+    .Call(`_juniper0_log_subtract_exp`, u, v)
 }
 
 log_sum_exp_vec <- function(w) {
-    .Call('_juniper0_log_sum_exp_vec', PACKAGE = 'juniper0', w)
+    .Call(`_juniper0_log_sum_exp_vec`, w)
 }
 
 wbar <- function(tinf, dateT, rOff, pOff, pi, shGen, scGen, shSam, scSam, delta_t) {
-    .Call('_juniper0_wbar', PACKAGE = 'juniper0', tinf, dateT, rOff, pOff, pi, shGen, scGen, shSam, scSam, delta_t)
+    .Call(`_juniper0_wbar`, tinf, dateT, rOff, pOff, pi, shGen, scGen, shSam, scSam, delta_t)
 }
 
 probTTree <- function(ttree, rOff, pOff, pi, shGen, scGen, shSam, scSam, dateT, wbar0, delta_t = 0.01) {
-    .Call('_juniper0_probTTree', PACKAGE = 'juniper0', ttree, rOff, pOff, pi, shGen, scGen, shSam, scSam, dateT, wbar0, delta_t)
+    .Call(`_juniper0_probTTree`, ttree, rOff, pOff, pi, shGen, scGen, shSam, scSam, dateT, wbar0, delta_t)
 }
 

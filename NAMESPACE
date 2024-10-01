@@ -3,6 +3,5 @@ export(plot_network)
 export(run_mcmc)
 export(summarize)
 
-useDynLib(mypackage)
-exportPattern("ˆ[[:alpha:]]+")
+useDynLib(juniper0, .registration=TRUE)
 importFrom(Rcpp, evalCpp)
