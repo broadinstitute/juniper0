@@ -185,70 +185,70 @@ NumericVector wbar(double tinf, double dateT, double rOff, double pOff, double p
   return log(out);
 }
 
- // [[Rcpp::export]]
- double probTTree(NumericMatrix ttree, double rOff, double pOff, double pi,
-                  double shGen, double scGen, double shSam, double scSam,
-                  double dateT, NumericVector wbar0, double delta_t=0.01){
+// [[Rcpp::export]]
+double probTTree(NumericMatrix ttree, double rOff, double pOff, double pi,
+                 double shGen, double scGen, double shSam, double scSam,
+                 double dateT, NumericVector wbar0, double delta_t=0.01){
 
-   int numCases = ttree.nrow();
+  int numCases = ttree.nrow();
 
-   if(shGen*scGen<0.001) throw(Rcpp::exception("error!! mean of gamma is too small."));
+  if(shGen*scGen<0.001) throw(Rcpp::exception("error!! mean of gamma is too small."));
 
-   if(dateT == INFINITY){ // finished outbreak
-     double wstar = wstar_rootFinder(pi, pOff, rOff);
+  if(dateT == INFINITY){ // finished outbreak
+    double wstar = wstar_rootFinder(pi, pOff, rOff);
 
-     NumericVector lsstatus = ifelse(is_na(ttree(_,1)), log(1-pi), log(pi)+dgamma(ttree(_,1)-ttree(_,0),shSam,scSam,1));
+    NumericVector lsstatus = ifelse(is_na(ttree(_,1)), log(1-pi), log(pi)+dgamma(ttree(_,1)-ttree(_,0),shSam,scSam,1));
 
-     std::map<int, std::vector<int> > infMap; // Map from infector to infected
-     std::vector<std::vector<int> > progeny(numCases);
-     for(int i=0; i<numCases; ++i){
-       if(ttree(i,2) == 0) continue; // Found root node i
+    std::map<int, std::vector<int> > infMap; // Map from infector to infected
+    std::vector<std::vector<int> > progeny(numCases);
+    for(int i=0; i<numCases; ++i){
+      if(ttree(i,2) == 0) continue; // Found root node i
 
-       progeny[ttree(i,2)-1].push_back(i); // C++ index starts from 0
-       infMap[ttree(i,2)-1] = progeny[ttree(i,2)-1];
-     }
-     double accum = 0.0;
-     for(int i=0; i<numCases; ++i){
-       accum += alpha(progeny[i].size(), pOff, rOff, log(wstar));
+      progeny[ttree(i,2)-1].push_back(i); // C++ index starts from 0
+      infMap[ttree(i,2)-1] = progeny[ttree(i,2)-1];
+    }
+    double accum = 0.0;
+    for(int i=0; i<numCases; ++i){
+      accum += alpha(progeny[i].size(), pOff, rOff, log(wstar));
 
-       for(unsigned int j=0; j<progeny[i].size(); ++j){
-         accum += R::dgamma(ttree(progeny[i][j],0) - ttree(i,0), shGen, scGen, 1);
-       }
-     }
-     return sum(lsstatus) + accum;
-   }
-   else{
-     // Ongoing outbreak -- observation ends at finite dateT
-     NumericVector lprobSam = log(pi)+pgamma(dateT-ttree(_,0),shSam,scSam,1,1);
-     for(int i=0; i<lprobSam.size(); ++i){
-       lprobSam[i] = log_subtract_exp(0.0,lprobSam[i]);
-     }
-     NumericVector lsstatus = ifelse(is_na(ttree(_,1)), lprobSam, log(pi)+dgamma(ttree(_,1)-ttree(_,0),shSam,scSam,1));
-     std::map<int, std::vector<int> > infMap; // Map from infector to infected
-     std::vector<std::vector<int> > progeny(numCases);
-     for(int i=0; i<numCases; ++i){
-       if(ttree(i,2) == 0) continue; // Found root node i
+      for(unsigned int j=0; j<progeny[i].size(); ++j){
+        accum += R::dgamma(ttree(progeny[i][j],0) - ttree(i,0), shGen, scGen, 1);
+      }
+    }
+    return sum(lsstatus) + accum;
+  }
+  else{
+    // Ongoing outbreak -- observation ends at finite dateT
+    NumericVector lprobSam = log(pi)+pgamma(dateT-ttree(_,0),shSam,scSam,1,1);
+    for(int i=0; i<lprobSam.size(); ++i){
+      lprobSam[i] = log_subtract_exp(0.0,lprobSam[i]);
+    }
+    NumericVector lsstatus = ifelse(is_na(ttree(_,1)), lprobSam, log(pi)+dgamma(ttree(_,1)-ttree(_,0),shSam,scSam,1));
+    std::map<int, std::vector<int> > infMap; // Map from infector to infected
+    std::vector<std::vector<int> > progeny(numCases);
+    for(int i=0; i<numCases; ++i){
+      if(ttree(i,2) == 0) continue; // Found root node i
 
-       progeny[ttree(i,2)-1].push_back(i); // C++ index starts from 0
-       infMap[ttree(i,2)-1] = progeny[ttree(i,2)-1];
-     }
-     double accum = 0.0;
-     //double tinfmin = min(ttree(_,0));
-     //NumericVector wbar0 = wbar(tinfmin, dateT, rOff, pOff, pi, shGen, scGen, shSam, scSam, delta_t);
+      progeny[ttree(i,2)-1].push_back(i); // C++ index starts from 0
+      infMap[ttree(i,2)-1] = progeny[ttree(i,2)-1];
+    }
+    double accum = 0.0;
+    //double tinfmin = min(ttree(_,0));
+    //NumericVector wbar0 = wbar(tinfmin, dateT, rOff, pOff, pi, shGen, scGen, shSam, scSam, delta_t);
 
-     double gridStart = dateT-wbar0.size()*delta_t;
+    double gridStart = dateT-wbar0.size()*delta_t;
 
-     for(int i=0; i<numCases; ++i){
+    for(int i=0; i<numCases; ++i){
 
-       if(progeny[i].empty() && i > 0){
-         lsstatus[i] = 0; // Reset to 0; this is covered in i's contribution
-       }else{
-         accum += alpha(progeny[i].size(), pOff, rOff,wbar0[std::min(wbar0.size()-1.0,std::round((ttree(i,0) - gridStart)/delta_t))]);
-         for(unsigned int j=0; j<progeny[i].size(); ++j){
-           accum += R::dgamma(ttree(progeny[i][j],0)-ttree(i,0), shGen, scGen, 1);
-         }
-       }
-     }
-     return sum(lsstatus) + accum;
-   }
- }
+      if(progeny[i].empty() && i > 0){
+        lsstatus[i] = 0; // Reset to 0; this is covered in i's contribution
+      }else{
+        accum += alpha(progeny[i].size(), pOff, rOff,wbar0[std::min(wbar0.size()-1.0,std::round((ttree(i,0) - gridStart)/delta_t))]);
+        for(unsigned int j=0; j<progeny[i].size(); ++j){
+          accum += R::dgamma(ttree(progeny[i][j],0)-ttree(i,0), shGen, scGen, 1);
+        }
+      }
+    }
+    return sum(lsstatus) + accum;
+  }
+}

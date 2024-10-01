@@ -221,7 +221,7 @@ get_ts <- function(mcmc, data, i){
   min_t <- mcmc$seq[[mcmc$h[i]]][1]
 
   # Number of hosts along the edge
-  n_hosts <- max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g)) - 1), 1)
+  n_hosts <- max(round(((max_t - min_t) / (mcmc$a_g / mcmc$lambda_g))), 1)
 
   # Increment back in time
   seq(max_t, min_t, length.out = n_hosts + 1)[1:n_hosts]
