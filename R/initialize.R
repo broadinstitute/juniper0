@@ -135,9 +135,9 @@ initialize <- function(
   }
 
   # Warn when using unrooted tree, unfixed mutation rate
-  if(!rooted & !fixed_mu){
-    message("Note: Convergence may fail when rooted = FALSE and fixed_mu = FALSE, especially if samples span a short date range. Consider setting one of these arguments to TRUE.")
-  }
+  # if(!rooted & !fixed_mu){
+  #   message("Note: Convergence may fail when rooted = FALSE and fixed_mu = FALSE, especially if samples span a short date range. Consider setting one of these arguments to TRUE.")
+  # }
 
   # Names of sequences
   names <- gsub("\\|.*", "", names(fasta))
@@ -328,7 +328,11 @@ initialize <- function(
   # Sequence of times at which the hosts along the edge leading into i were sampled
   mcmc$seq <- list()
   mcmc$seq[[1]] <- tmrca
-  mcmc$seq[2:n] <- lapply(2:n, get_ts, mcmc = mcmc, data = data)
+
+  # Time of first infection is one average sojourn interval pre-test
+  # Data jittered for intialization of transmission network
+  mcmc$seq[2:n] <- as.list(data$s[2:n] - (mcmc$a_s / mcmc$lambda_s) + rnorm(n-1, 0, 0.01))
+
 
   # Times at which mutations occur
   mcmc$tmu <- list()
@@ -364,8 +368,6 @@ initialize <- function(
     data$snvs[[i]]$snv <- NULL
   }
 
-
-
   if(!data$rooted){
     mcmc <- genotype(mcmc, data, 1)[[1]]
   }
@@ -373,13 +375,69 @@ initialize <- function(
   ## Re-initialize h[i] to nearest genetic neighbor to i infected before i
   ## Can use shift_upstream
 
-  ##################
-  # YOUR CODE HERE #
-  ##################
+  # Order in which to shift nodes
+  ord <- sort.int(unlist(mcmc$seq), decreasing = T, index.return = T)$ix
 
-  # Could even degree-bound
+  mut_names <- list()
+  for (i in 1:n) {
+    mut_names[[i]] <- paste0(mcmc$subs$from[[i]], mcmc$subs$pos[[i]], mcmc$subs$to[[i]])
+  }
 
-  #print(length(unlist(mcmc$subs$from)))
+
+  for (i in 1:(n-1)) {
+
+    # Which person are we updating the ancestor of?
+    who <- ord[i]
+
+    # Distances, genetically, to each other person
+    dists <- rep(0, n-i)
+
+    for (j in (i+1):n) {
+
+      # Who is the proposed ancestor?
+      anc <- ord[j]
+
+      # Distance from i to j
+      # First compute number of shared mutations relative to root
+      n_shared <- length(intersect(
+        mut_names[[who]], mut_names[[anc]]
+      ))
+
+      # Distance is number of mutations in who + number in anc - 2*n_shared
+      dists[j-i] <- length(mut_names[[who]]) + length(mut_names[[anc]]) - 2*n_shared
+    }
+
+    # Choose the ancestor that minimizes the distance
+    anc <- (ord[(i+1):n])[which.min(dists)]
+
+    # Update ancestor
+    mcmc <- shift(mcmc, data, who, 1, anc, upstream = T)
+
+    # Clear out SNVs that dropout in "who"
+    keep <- which(!(mcmc$subs$pos[[who]] %in% mcmc$dropout[[who]]))
+    mcmc$subs$from[[who]] <- mcmc$subs$from[[who]][keep]
+    mcmc$subs$pos[[who]] <- mcmc$subs$pos[[who]][keep]
+    mcmc$subs$to[[who]] <- mcmc$subs$to[[who]][keep]
+
+    # Update genotype at who
+    # This will also update mutation times leading into "who"
+    mcmc <- genotype(mcmc, data, who)[[1]]
+
+  }
+
+  # Resample seq
+  for (i in 2:n) {
+    mcmc$seq[[i]] <- get_ts(mcmc, data, i)
+
+    if(!identical(get_dropout(mcmc, data, i), mcmc$dropout[[i]])){
+      stop("dropout error 2")
+    }
+
+    # Check parsimony while we're at it
+    if(!genotype(mcmc, data, i, check_parsimony = T)){
+      stop("parsimony error in initialization")
+    }
+  }
 
   ## Check that no SNVs are listed in "dropout"
   for (i in 1:n) {
@@ -392,8 +450,6 @@ initialize <- function(
 
   data$t_min <- min(data$s, na.rm = T) * 10
   mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
-
-  #print(data$wbar)
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes
