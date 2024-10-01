@@ -361,7 +361,6 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
     ## We now have all the info we need to make the move
     if(check_parsimony){
       if(!(letter_current %in% parsimonious)){
-        print(p)
         return(F)
       }
     }
