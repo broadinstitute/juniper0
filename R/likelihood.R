@@ -143,29 +143,43 @@ e_lik_personal <- function(mcmc, data, i){
 
   ttree <- matrix(c(t_i, t_s, h), ncol = 3)
 
+  if(nrow(ttree) == 0){
+    stop("??")
+  }
+
   # 1st param in NBin offspring distribution
   rho <- mcmc$R * mcmc$psi / (1 - mcmc$psi)
 
-  out <- TransPhylo::probTTree(
-    ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
+  # Min time of infection
+  tinfmin <- min(ttree[,1])
+  # Length of wbar
+  wbar_len <- round((-tinfmin)/0.1)
+  # Relevant entries of wbar
+  wbar0 <- mcmc$wbar[(length(mcmc$wbar) - wbar_len + 1):length(mcmc$wbar)]
+
+  #print(wbar0)
+
+  out <- probTTree(
+    ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, wbar0 = wbar0,  delta_t = 0.1
   )
 
-  if(length(js) > 0){
-    # Subtract this off to get the contribution at i alone
-    ttree_correction <- matrix(
-      c(
-        sapply(mcmc$seq[js], function(v){v[1]}),
-        data$s[js],
-        rep(0, length(js))
-      ),
-      ncol = 3,
-      byrow = F
-    )
-
-    out <- out - TransPhylo::probTTree(
-      ttree_correction, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
-    )
-  }
+  # if(length(js) > 0){
+  #   # Subtract this off to get the contribution at i alone
+  #   ttree_correction <- matrix(
+  #     c(
+  #       sapply(mcmc$seq[js], function(v){v[1]}),
+  #       data$s[js],
+  #       rep(0, length(js))
+  #     ),
+  #     ncol = 3,
+  #     byrow = F
+  #   )
+  #
+  #   out <- out - TransPhylo::probTTree(
+  #     ttree_correction, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, delta_t = 0.1
+  #   )
+  #
+  # }
 
   return(out)
 

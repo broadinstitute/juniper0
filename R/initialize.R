@@ -243,6 +243,8 @@ initialize <- function(
   data$names <- names
   data$s_max <- s_max
 
+
+
   # Later: could move elements of "data" that aren't used in MCMC to a new "config" list
 
   mcmc <- list()
@@ -362,11 +364,20 @@ initialize <- function(
     data$snvs[[i]]$snv <- NULL
   }
 
-  #print(length(unlist(mcmc$subs$from)))
+
 
   if(!data$rooted){
     mcmc <- genotype(mcmc, data, 1)[[1]]
   }
+
+  ## Re-initialize h[i] to nearest genetic neighbor to i infected before i
+  ## Can use shift_upstream
+
+  ##################
+  # YOUR CODE HERE #
+  ##################
+
+  # Could even degree-bound
 
   #print(length(unlist(mcmc$subs$from)))
 
@@ -378,6 +389,11 @@ initialize <- function(
       stop("No mutations should be listed at positions that drop out")
     }
   }
+
+  data$t_min <- min(data$s, na.rm = T) * 10
+  mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
+
+  #print(data$wbar)
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes

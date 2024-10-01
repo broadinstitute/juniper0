@@ -34,7 +34,7 @@ local_mcmc <- function(mcmc, data){
 
   for (r in 1:data$n_local) {
 
-    print(r)
+    #print(r)
 
     ## SAFETY STUFF---TURN ON WHEN MAKING CHANGES
 
@@ -43,39 +43,39 @@ local_mcmc <- function(mcmc, data){
     #   stop("Updated mutations wrong")
     # }
     #
-    # if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-    #   bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
-    #   print(bad)
-    #   print(mcmc$external_roots)
-    #   print(mcmc$g_lik[bad])
-    #   print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
-    #   print(r)
-    #   print(data$rooted)
-    #   stop("Genomic likelihood error")
-    # }
-    #
-    #
-    # if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
-    #   bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
-    #   print(bad)
-    #   print(mcmc$external_roots)
-    #   print(mcmc$e_lik[bad])
-    #   print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
-    #   print(r)
-    #   print(data$rooted)
-    #   stop("e likelihood error")
-    # }
-    #
-    # if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
-    #   bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
-    #   print(bad)
-    #   print(mcmc$external_roots)
-    #   print(mcmc$m_lik[bad])
-    #   print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
-    #   print(r)
-    #   print(data$rooted)
-    #   stop("m likelihood error")
-    # }
+    if(!all(mcmc$g_lik == sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$g_lik[bad])
+      print(sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)[bad])
+      print(r)
+      print(data$rooted)
+      stop("Genomic likelihood error")
+    }
+
+
+    if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$e_lik[bad])
+      print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
+      print(r)
+      print(data$rooted)
+      stop("e likelihood error")
+    }
+
+    if(!all(mcmc$m_lik == sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data))){
+      bad <- (which(mcmc$m_lik != sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)))
+      print(bad)
+      print(mcmc$external_roots)
+      print(mcmc$m_lik[bad])
+      print(sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)[bad])
+      print(r)
+      print(data$rooted)
+      stop("m likelihood error")
+    }
 
     # if(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)) > 1e-6){
     #   print(abs(sum(mcmc$m_lik + mcmc$e_lik) - e_lik(mcmc, data)))
@@ -125,77 +125,58 @@ local_mcmc <- function(mcmc, data){
     #   stop("root degree error")
     # }
 
-
-
-    #Move 11
+    # Move 4
     mcmc <- move_seq(mcmc, data, also_resample_tmu = F)
 
+    # Move 5
     mcmc <- move_seq(mcmc, data, also_resample_tmu = T)
 
-
-
-
-    # Move 12
-
-    # Move 13
+    # Move 6
     mcmc <- move_w_t(mcmc, data)
 
+    # Move 7
     mcmc <- move_w_t(mcmc, data, recursive = T)
 
-    # Move 23
+    # Move 8
     mcmc <- move_genotype(mcmc, data)
 
-
-
+    # Move 9
     if(runif(1) < 1/2){
-      # Move 14
       mcmc <- move_h_step(mcmc, data)
     }else{
-      # Move 15
       mcmc <- move_h_step(mcmc, data, upstream = F)
     }
 
-    # Move 20
+    # Move 10
     mcmc <- move_h_global(mcmc, data, biassed = F)
+
+    # Move 11
     mcmc <- move_h_global(mcmc, data)
 
-
-
-
-
-    # Move 21
+    # Move 12
     mcmc <- move_swap(mcmc, data)
 
-    # Move 22
+    # Move 13
     mcmc <- move_swap(mcmc, data, exchange_children = T)
 
-
+    # Move 14
     if(runif(1) < 1/2){
-      # Move 24
       mcmc <- move_create(mcmc, data)
     }else{
-      # Move 25
       mcmc <- move_delete(mcmc, data)
     }
 
-
-
-
+    # Move 15
     if(runif(1) < 1/2){
-      # Move 26
       mcmc <- move_create(mcmc, data, upstream = F)
-
     }else{
-      # Move 27
       mcmc <- move_delete(mcmc, data, upstream = F)
     }
 
+    # Move 16
     if(runif(1) < 1/2){
-      # Move 28
       mcmc <- move_create(mcmc, data, upstream = T, biassed = T)
-
     }else{
-      # Move 29
       mcmc <- move_delete(mcmc, data, upstream = T, biassed = T)
     }
 

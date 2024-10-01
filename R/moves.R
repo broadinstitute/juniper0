@@ -200,6 +200,10 @@ move_pi <- function(mcmc, data){
   if(prop$pi <= 0 | prop$pi >= 1){
     return(mcmc)
   }else{
+
+    prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+
+
     update_e <- 1:mcmc$n
     update_g <- integer(0)
     update_m <- integer(0)
@@ -224,6 +228,8 @@ move_N_eff <- function(mcmc, data){
   prop <- mcmc
   prop$N_eff <- rnorm(1, mcmc$N_eff, 0.5)
 
+  prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+
   update <- 1:mcmc$n
   return(accept_or_reject(prop, mcmc, data, update, update, update))
 }
@@ -236,6 +242,9 @@ move_R <- function(mcmc, data){
   if(prop$R <= 0){
     return(mcmc)
   }
+
+  prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+
 
   update_e <- 1:mcmc$n
   update_g <- integer(0)
