@@ -1,3 +1,5 @@
+// Code taken and adapted from TransPhylo (Didelot et al. 2017)
+
 #include <Rcpp.h>
 using namespace Rcpp;
 

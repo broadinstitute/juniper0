@@ -407,6 +407,10 @@ initialize <- function(
       dists[j-i] <- length(mut_names[[who]]) + length(mut_names[[anc]]) - 2*n_shared
     }
 
+    # Get the indices of "dists" going from lowest/best to highest/worst
+    # We will try each one until we find a move that doesn't violate local parsimony
+    # Usually the first move will be fine, but occasionally not
+
     # Choose the ancestor that minimizes the distance
     anc <- (ord[(i+1):n])[which.min(dists)]
 
@@ -423,19 +427,35 @@ initialize <- function(
     # This will also update mutation times leading into "who"
     mcmc <- genotype(mcmc, data, who)[[1]]
 
+    print(i)
+
   }
 
   # Resample seq
-  for (i in 2:n) {
-    mcmc$seq[[i]] <- get_ts(mcmc, data, i)
+  for (i in ord) {
+
+    if(i != 1){
+      mcmc$seq[[i]] <- get_ts(mcmc, data, i)
+    }
 
     if(!identical(get_dropout(mcmc, data, i), mcmc$dropout[[i]])){
-      stop("dropout error 2")
+      print(i)
+      print("dropout error 2")
     }
 
     # Check parsimony while we're at it
     if(!genotype(mcmc, data, i, check_parsimony = T)){
-      stop("parsimony error in initialization")
+
+      mcmc <- genotype(mcmc, data, i)[[1]]
+      neighbors <- which(mcmc$h == i)
+      if(i != 1){
+        neighbors <- c(mcmc$h[i], neighbors)
+      }
+
+      if(!all(sapply(neighbors, genotype, mcmc=mcmc, data=data, check_parsimony = T))){
+        print(i)
+        print("parsimony error in initialization")
+      }
     }
   }
 
@@ -444,7 +464,8 @@ initialize <- function(
     if(any(
       mcmc$subs$pos[[i]] %in% mcmc$dropout[[i]]
     )){
-      stop("No mutations should be listed at positions that drop out")
+      print(i)
+      print("No mutations should be listed at positions that drop out")
     }
   }
 
