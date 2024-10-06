@@ -150,6 +150,9 @@ breakdown <- function(mcmc, data, old_roots){
       datas[[i]]$rooted <- T
     }
 
+    # No need to store names
+    datas[[i]]$names <- NULL
+
     # e_lik needs to be re-computed based on the smaller set
     # mcmcs[[i]]$e_lik <- e_lik(mcmcs[[i]], datas[[i]])
     # if(is.infinite(mcmcs[[i]]$e_lik)){

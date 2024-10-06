@@ -472,6 +472,8 @@ initialize <- function(
   data$t_min <- min(data$s, na.rm = T) * 10
   mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
 
+  ## RERUN FROM HERE BELOW WHEN I'M BACK
+
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes
   mcmc$e_lik <- sapply(1:n, e_lik_personal, mcmc = mcmc, data = data)
