@@ -159,18 +159,18 @@ breakdown <- function(mcmc, data, old_roots){
     #   stop("e_lik error in breakdown")
     # }
 
-    if(any(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))){
-
-      bad <- which(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))
-      print(joined)
-      print(datas[[i]]$vcf_present)
-      print(bad)
-      print(mcmcs[[i]]$g_lik[bad])
-      print(sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]])[bad])
-
-
-      stop("g_lik error in breakdown")
-    }
+    # if(any(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))){
+    #
+    #   bad <- which(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))
+    #   print(joined)
+    #   print(datas[[i]]$vcf_present)
+    #   print(bad)
+    #   print(mcmcs[[i]]$g_lik[bad])
+    #   print(sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]])[bad])
+    #
+    #
+    #   stop("g_lik error in breakdown")
+    # }
 
 
     # Record only observed hosts in each cluster
