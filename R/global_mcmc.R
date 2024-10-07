@@ -159,6 +159,8 @@ breakdown <- function(mcmc, data, old_roots){
     #   stop("e_lik error in breakdown")
     # }
 
+    ## SAFETY MODE
+
     # if(any(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))){
     #
     #   bad <- which(mcmcs[[i]]$g_lik != sapply(1:mcmcs[[i]]$n, g_lik, mcmc=mcmcs[[i]], data=datas[[i]]))

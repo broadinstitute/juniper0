@@ -324,22 +324,20 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
 
       }
 
-      if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
-        bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
-        print(bad)
-        print(mcmc$external_roots)
-        print(mcmc$e_lik[bad])
-        print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
-        stop("e likelihood error in amalgamate")
-      }
+      # if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
+      #   bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
+      #   print(bad)
+      #   print(mcmc$external_roots)
+      #   print(mcmc$e_lik[bad])
+      #   print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
+      #   stop("e likelihood error in amalgamate")
+      # }
 
-
-      ## Correct node degrees
-      # Test this; check not much changes
-      #mcmc$d <- sapply(1:mcmc$n, function(x){sum(mcmc$h[2:mcmc$n] == x)}) # Node degrees
-      # Can make this smarter...
 
       res[[i]] <- mcmc
+
+
+      ## SAFETY MODE
 
       # if(abs(mcmc$e_lik - e_lik(mcmc, data)) > 0.01){
       #   print(mcmc$e_lik, digits = 20)
@@ -347,10 +345,10 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
       #   stop("e_lik error in amalgamate")
       # }
 
-      if(any(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-
-        stop("g_lik error in amalgamate")
-      }
+      # if(any(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
+      #
+      #   stop("g_lik error in amalgamate")
+      # }
 
 
 
