@@ -321,47 +321,25 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
         if(i == n_samples){
           new_roots <- c(new_roots, mappings[[j]][1])
         }
-
       }
-
-      # if(!all(mcmc$e_lik == sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data))){
-      #   bad <- (which(mcmc$e_lik != sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)))
-      #   print(bad)
-      #   print(mcmc$external_roots)
-      #   print(mcmc$e_lik[bad])
-      #   print(sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)[bad])
-      #   stop("e likelihood error in amalgamate")
-      # }
-
 
       res[[i]] <- mcmc
 
 
       ## SAFETY MODE
+      if(!is.na(data$safety)){
 
-      # if(abs(mcmc$e_lik - e_lik(mcmc, data)) > 0.01){
-      #   print(mcmc$e_lik, digits = 20)
-      #   print(e_lik(mcmc, data), digits = 20)
-      #   stop("e_lik error in amalgamate")
-      # }
+        if(any(abs(mcmc$g_lik - sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data)) > data$safety)){
+          stop("g_lik error in amalgamate")
+        }
 
-      # if(any(mcmc$g_lik != sapply(1:mcmc$n, g_lik, mcmc=mcmc, data=data))){
-      #
-      #   stop("g_lik error in amalgamate")
-      # }
+        if(any(abs(mcmc$e_lik - sapply(1:mcmc$n, e_lik_personal, mcmc=mcmc, data=data)) > data$safety)){
+          stop("e_lik error in amalgamate")
+        }
 
-
-
-
-
-    }
-
-    if(mcmc$n > data$n_obs){
-      degs <- sapply((data$n_obs + 1):(mcmc$n), function(n){length(which(mcmc$h == n))})
-      if(any(degs < 2 & !((data$n_obs + 1):(mcmc$n) %in% mcmc$external_roots))){
-        print(which(degs < 2) + data$n_obs)
-        print(new_roots)
-        stop("degree error in amalgamate")
+        if(any(abs(mcmc$m_lik - sapply(1:mcmc$n, m_lik, mcmc=mcmc, data=data)) > data$safety)){
+          stop("m_lik error in amalgamate")
+        }
       }
     }
 

@@ -20,6 +20,7 @@
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
 #' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.
 #' @param N_eff The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).
+#' @param safety Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.
 #' @return The initial configuration of the Markov Chain.
 #' @export
 initialize <- function(
@@ -41,7 +42,8 @@ initialize <- function(
     psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
     init_mu = 2e-5,
     fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
-    N_eff = log(100) # Effective population size, within host
+    N_eff = log(100), # Effective population size, within host
+    safety = NA
 ){
 
   ## Filters
@@ -242,6 +244,7 @@ initialize <- function(
   data$fixed_mu <- fixed_mu
   data$names <- names
   data$s_max <- s_max
+  data$safety <- safety
 
 
 

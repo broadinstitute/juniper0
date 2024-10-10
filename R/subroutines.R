@@ -897,7 +897,7 @@ snv_status <- function(mcmc, i, js, snv){
 }
 
 # Accept / reject
-accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, hastings = 0, check_parsimony = integer(0), noisy = FALSE){
+accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, hastings = 0, check_parsimony = integer(0), parallelize = FALSE, noisy = FALSE){
   if(is.infinite(hastings)){
     stop("hastings error")
   }
@@ -935,15 +935,34 @@ accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, has
   # }
 
   if(length(update_e) > 0){
-    prop$e_lik[update_e] <- sapply(update_e, e_lik_personal, mcmc = prop, data = data)
+
+    if(parallelize){
+      prop$e_lik[update_e] <- unlist(parallel::mclapply(update_e, e_lik_personal, mcmc = prop, data = data, mc.cores = data$n_subtrees))
+    }else{
+      prop$e_lik[update_e] <- sapply(update_e, e_lik_personal, mcmc = prop, data = data)
+    }
+
   }
 
   if(length(update_g) > 0){
-    prop$g_lik[update_g] <- sapply(update_g, g_lik, mcmc = prop, data = data)
+
+    if(parallelize){
+      prop$g_lik[update_g] <- unlist(parallel::mclapply(update_g, g_lik, mcmc = prop, data = data, mc.cores = data$n_subtrees))
+    }else{
+      prop$g_lik[update_g] <- sapply(update_g, g_lik, mcmc = prop, data = data)
+    }
+
+
   }
 
   if(length(update_m) > 0){
-    prop$m_lik[update_m] <- sapply(update_m, m_lik, mcmc = prop, data = data)
+
+    if(parallelize){
+      prop$m_lik[update_m] <- unlist(parallel::mclapply(update_m, m_lik, mcmc = prop, data = data, mc.cores = data$n_subtrees))
+    }else{
+      prop$m_lik[update_m] <- sapply(update_m, m_lik, mcmc = prop, data = data)
+    }
+
   }
 
   prop$prior <- prior(prop)
@@ -971,12 +990,21 @@ accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, has
 }
 
 # BFS traversal of tree
-bfs <- function(i, h){
-  out <- i
-  frontier <- which(h == i)
+bfs <- function(h){
+  n <- length(h)
+  kids <- rep(list(integer(0)), n)
+
+  for (i in 2:n) {
+    kids[[h[i]]] <- c(kids[[h[i]]], i)
+  }
+
+  out <- rep(1, n)
+  frontier <- kids[[1]]
+  counter <- 2
   while (length(frontier) > 0) {
-    out <- c(out, frontier)
-    frontier <- which(h %in% frontier)
+    out[counter:(counter + length(frontier) - 1)] <- frontier
+    counter <- counter + length(frontier)
+    frontier <- unlist(kids[frontier])
   }
   return(out)
 }
@@ -999,63 +1027,50 @@ chop <- function(mcmc, data, old_roots){
   # Initial tree (will change)
   h <- mcmc$h
 
-  # Node degrees
-  d <- sapply(1:mcmc$n, function(i){sum(mcmc$h[2:mcmc$n] == i)})
-
-
   # Traverse the tree in reverse-BFS order
-  ord <- rev(bfs(1, h))
+  ord <- rev(bfs(h))
 
   # Minimum number of nodes per subtree
   lambda <- mcmc$n / data$n_subtrees
 
-  # Tree outputs (not including roots)
-  trees <- list()
-
   # Root outputs
   roots <- c()
 
-  # All upstream nodes, not including self
-  w <- rep(0, mcmc$n)
+  # Childen of a node, not including self
+  kids <- rep(list(integer(0)), mcmc$n)
+
+  # How many nodes have been chopped off so far?
+  n_cut <- 0
 
   for (v in ord) {
     if(v == 1){
 
-      sub <- bfs(v, h)
-
-      trees <- c(trees, list(sort(sub[-1])))
-      roots <- c(roots, v)
+      #trees <- c(trees, kids[1])
+      roots <- c(roots, 1)
     }else{
-      # Update number of upstream nodes of vertex v
-      if(d[v] > 0){
-        kids <- which(h == v)
-        if(length(kids) > 0){
-          w[v] <- w[v] + length(kids) + sum(w[kids])
-        }
-      }
-      # If weight is large enough, and root is observed, and root isn't previous root, hack off a piece of the tree
+
       if(
-        w[v] >= lambda &
-        #v <= data$n_obs &
-        !(v %in% old_roots)
+        length(kids[[v]]) >= lambda & # Enough kids to make a subtree
+        !(v %in% old_roots) & # Wasn't a previous root
+        mcmc$n - n_cut - length(kids[[v]]) >= lambda # Root has enough kids
       ){
-        if(mcmc$n - length(unlist(trees)) - w[v] >= lambda){
+        # Make sure global root has enough kids
+        #trees <- c(trees, kids[v])
+        roots <- c(roots, v)
+        n_cut <- n_cut + length(kids[[v]])
 
-          sub <- bfs(v, h)
+        # Back up only the root into its ancestor, since it's ALSO part of its parent subtree
+        kids[[h[v]]] <- c(kids[[h[v]]], v)
 
-          trees <- c(trees, list(sort(sub[-1])))
-          roots <- c(roots, v)
 
-          # Delete nodes from tree, except root
-          ## CHECK kids is correct
-          h[kids] <- NA
-
-          # Reset upstream nodes of root to nothing
-          w[v] <- 0
-        }
+      }else{
+        # Otherwise, back up kids of v onto kids of h[v]
+        kids[[h[v]]] <- c(kids[[h[v]]], v, kids[[v]])
       }
     }
   }
+
+  trees <- lapply(kids[roots], sort)
 
   return(list(roots, trees))
 }
