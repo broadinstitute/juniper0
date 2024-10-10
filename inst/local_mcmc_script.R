@@ -28,66 +28,66 @@ load(paste0("tmp/datas_", j, ".RData"))
 
 res <- list()
 
-for (r in 1:data$n_local) {
+for (r in 1:d0$n_local) {
 
   # Move 4
-  mcmc <- move_seq(mcmc, data, also_resample_tmu = F)
+  m0 <- move_seq(m0, d0, also_resample_tmu = F)
 
   # Move 5
-  mcmc <- move_seq(mcmc, data, also_resample_tmu = T)
+  m0 <- move_seq(m0, d0, also_resample_tmu = T)
 
   # Move 6
-  mcmc <- move_w_t(mcmc, data)
+  m0 <- move_w_t(m0, d0)
 
   # Move 7
-  mcmc <- move_w_t(mcmc, data, recursive = T)
+  m0 <- move_w_t(m0, d0, recursive = T)
 
   # Move 8
-  mcmc <- move_genotype(mcmc, data)
+  m0 <- move_genotype(m0, d0)
 
   # Move 9
   if(runif(1) < 1/2){
-    mcmc <- move_h_step(mcmc, data)
+    m0 <- move_h_step(m0, d0)
   }else{
-    mcmc <- move_h_step(mcmc, data, upstream = F)
+    m0 <- move_h_step(m0, d0, upstream = F)
   }
 
   # Move 10
-  mcmc <- move_h_global(mcmc, data, biassed = F)
+  m0 <- move_h_global(m0, d0, biassed = F)
 
   # Move 11
-  mcmc <- move_h_global(mcmc, data)
+  m0 <- move_h_global(m0, d0)
 
   # Move 12
-  mcmc <- move_swap(mcmc, data)
+  m0 <- move_swap(m0, d0)
 
   # Move 13
-  mcmc <- move_swap(mcmc, data, exchange_children = T)
+  m0 <- move_swap(m0, d0, exchange_children = T)
 
   # Move 14
   if(runif(1) < 1/2){
-    mcmc <- move_create(mcmc, data)
+    m0 <- move_create(m0, d0)
   }else{
-    mcmc <- move_delete(mcmc, data)
+    m0 <- move_delete(m0, d0)
   }
 
   # Move 15
   if(runif(1) < 1/2){
-    mcmc <- move_create(mcmc, data, upstream = F)
+    m0 <- move_create(m0, d0, upstream = F)
   }else{
-    mcmc <- move_delete(mcmc, data, upstream = F)
+    m0 <- move_delete(m0, d0, upstream = F)
   }
 
   # Move 16
   if(runif(1) < 1/2){
-    mcmc <- move_create(mcmc, data, upstream = T, biassed = T)
+    m0 <- move_create(m0, d0, upstream = T, biassed = T)
   }else{
-    mcmc <- move_delete(mcmc, data, upstream = T, biassed = T)
+    m0 <- move_delete(m0, d0, upstream = T, biassed = T)
   }
 
   # Append new results
-  if(r %% data$sample_every == 0){
-    res <- c(res, list(mcmc))
+  if(r %% d0$sample_every == 0){
+    res <- c(res, list(m0))
   }
 }
 
