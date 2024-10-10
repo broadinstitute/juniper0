@@ -63,9 +63,14 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
     dir.create("tmp")
 
     for (j in 1:length(mcmcs)) {
-      save(mcmcs[[j]], file = paste0("tmp/mcmcs_", j, ".RData"))
-      save(datas[[j]], file = paste0("tmp/datas_", j, ".RData"))
+      m0 <- mcmcs[[j]]
+      d0 <- datas[[j]]
+      save(m0, file = paste0("tmp/mcmcs_", j, ".RData"))
+      save(d0, file = paste0("tmp/datas_", j, ".RData"))
     }
+
+    # Command to run all these in parallel
+    cmd <- paste("Rscript", system.file("local_mcmc_script.R", package = "juniper0"), 1:length(mcmcs))
 
 
     # all_res <- parallel::mclapply(
