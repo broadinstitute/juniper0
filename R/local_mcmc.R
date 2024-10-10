@@ -20,8 +20,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Schedule of moves within a subtree
-
+#' Internal function to run local moves on a subtree
+#'
+#' @param mcmc Current state of the Markov chain.
+#' @param data Fixed parameter values supplied to the Markov chain.
+#' @return List of samples from the local tree.
+#' @export
 local_mcmc <- function(mcmc, data){
 
 

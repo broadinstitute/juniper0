@@ -23,7 +23,8 @@ initialize(
   psi = 0.5,
   init_mu = 2e-05,
   fixed_mu = F,
-  N_eff = log(100)
+  N_eff = log(100),
+  safety = NA
 )
 }
 \arguments{
@@ -62,6 +63,8 @@ initialize(
 \item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.}
 
 \item{N_eff}{The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).}
+
+\item{safety}{Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.}
 }
 \value{
 The initial configuration of the Markov Chain.
