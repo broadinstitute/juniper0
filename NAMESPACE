@@ -2,6 +2,7 @@ export(initialize)
 export(plot_network)
 export(run_mcmc)
 export(summarize)
+export(local_mcmc)
 
 useDynLib(juniper0, .registration=TRUE)
 importFrom(Rcpp, evalCpp)
