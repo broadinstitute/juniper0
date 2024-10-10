@@ -71,8 +71,23 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
 
     # Command to run all these in parallel
     cmd <- paste("Rscript", system.file("local_mcmc_script.R", package = "juniper0"), 1:length(mcmcs))
+    cmd <- paste(cmd, collapse = " & ")
+    cmd <- paste(cmd, "& wait")
 
+    # Run in parallel
+    system(cmd, wait = T)
 
+    # Collect results
+    all_res <- list()
+    for (j in 1:length(mcmcs)) {
+      load(paste0("tmp/res_", j, ".RData"))
+      all_res[[j]] <- res
+    }
+
+    # Delete the temporary directory
+    unlink("tmp", recursive=TRUE)
+
+    # ...or run using parallel package in R...
     # all_res <- parallel::mclapply(
     #   1:length(mcmcs),
     #   function(i, mcmcs, datas){
