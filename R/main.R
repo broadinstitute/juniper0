@@ -59,16 +59,25 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
       message(paste("Parallelizing over", length(mcmcs), "cores..."))
     }
 
-    all_res <- parallel::mclapply(
-      1:length(mcmcs),
-      function(i, mcmcs, datas){
-        local_mcmc(mcmcs[[i]], datas[[i]])
-      },
-      mcmcs = mcmcs,
-      datas = datas,
-      mc.set.seed = F,
-      mc.cores = length(mcmcs)
-    )
+    ## Attempt at foolproof parallelization: write each element of mcmcs to its own .RData file, then run in parallel
+    dir.create("tmp")
+
+    for (j in 1:length(mcmcs)) {
+      save(mcmcs[[j]], file = paste0("tmp/mcmcs_", j, ".RData"))
+      save(datas[[j]], file = paste0("tmp/datas_", j, ".RData"))
+    }
+
+
+    # all_res <- parallel::mclapply(
+    #   1:length(mcmcs),
+    #   function(i, mcmcs, datas){
+    #     local_mcmc(mcmcs[[i]], datas[[i]])
+    #   },
+    #   mcmcs = mcmcs,
+    #   datas = datas,
+    #   mc.set.seed = F,
+    #   mc.cores = length(mcmcs)
+    # )
     #...or run in series
     # all_res <- list()
     # for (j in 1:length(mcmcs)) {
