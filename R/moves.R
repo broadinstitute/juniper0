@@ -207,7 +207,7 @@ move_pi <- function(mcmc, data){
     update_e <- 1:mcmc$n
     update_g <- integer(0)
     update_m <- integer(0)
-    return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, parallelize = TRUE)) # Can parallelize this because not running within a subtree
+    return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m)) # Can parallelize this because not running within a subtree
   }
 }
 
@@ -219,7 +219,7 @@ move_mu <- function(mcmc, data){
   update_e <- integer(0)
   update_g <- 1:mcmc$n
   update_m <- 1:mcmc$n
-  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, parallelize = TRUE))
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 }
 
 ## Update p
@@ -231,7 +231,7 @@ move_N_eff <- function(mcmc, data){
   prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
 
   update <- 1:mcmc$n
-  return(accept_or_reject(prop, mcmc, data, update, update, update, parallelize = TRUE))
+  return(accept_or_reject(prop, mcmc, data, update, update, update))
 }
 
 ## Update R
@@ -250,7 +250,7 @@ move_R <- function(mcmc, data){
   update_g <- integer(0)
   update_m <- integer(0)
 
-  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, parallelize = TRUE))
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 
 }
 
@@ -267,7 +267,7 @@ move_psi <- function(mcmc, data){
   update_e <- 1:mcmc$n
   update_g <- integer(0)
   update_m <- integer(0)
-  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, parallelize = TRUE))
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 }
 
 ## Update genotype at (a) missing sites in observed host, or (b) all sites in unobserved host, based on parsimony
