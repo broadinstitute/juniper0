@@ -83,13 +83,15 @@ e_lik <- function(mcmc, data, noisy = F){
 }
 
 # Likelihood from mutations and prior on rho
-m_lik <- function(mcmc, data, i){
+m_lik <- function(mcmc, data, i, js = NULL){
 
   if(i %in% mcmc$external_roots){
     return(0)
   }
 
-  js <- which(mcmc$h == i)
+  if(is.null(js)){
+    js <- which(mcmc$h == i)
+  }
 
   if(length(js) == 0){
     return(0)
@@ -106,14 +108,18 @@ m_lik <- function(mcmc, data, i){
 }
 
 # Compute e_lik for each individual
-e_lik_personal <- function(mcmc, data, i){
+e_lik_personal <- function(mcmc, data, i, js = NULL){
 
   if(i %in% mcmc$external_roots){
     return(0)
   }
 
-  # Children of i
-  js <- which(mcmc$h == i)
+  if(is.null(js)){
+    # Children of i
+    js <- which(mcmc$h == i)
+  }
+
+
 
   if(length(js) > 0){
     # Reverse order of mcmc$seq[js]
@@ -169,7 +175,7 @@ e_lik_personal <- function(mcmc, data, i){
 
 # Compute genomic log likelihood for each person
 # This is now just the probability of the iSNVs layered on top
-g_lik <- function(mcmc, data, i){
+g_lik <- function(mcmc, data, i, js = NULL){
 
   #return(0)
 
@@ -195,7 +201,10 @@ g_lik <- function(mcmc, data, i){
   freq[mcmc$bot[[i]]] <- 1 - freq[mcmc$bot[[i]]]
 
   # Children of i
-  js <- which(mcmc$h == i)
+  if(is.null(js)){
+    js <- which(mcmc$h == i)
+  }
+
 
   # Time of emergence of SNVs in global phylogeny that might get picked up as iSNVs
   trans_isnv_pos <- integer(0)

@@ -896,8 +896,17 @@ snv_status <- function(mcmc, i, js, snv){
   return(from)
 }
 
+# Convert ancestry list to kids per node
+anc_to_js <- function(h, is){
+  out <- rep(list(integer(0)), length(h))
+  for (j in 2:length(h)) {
+    out[[h[j]]] <- c(out[[h[j]]], j)
+  }
+  return(out[is])
+}
+
 # Accept / reject
-accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, hastings = 0, check_parsimony = integer(0), parallelize = FALSE, noisy = FALSE){
+accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, hastings = 0, check_parsimony = integer(0), noisy = FALSE){
   if(is.infinite(hastings)){
     stop("hastings error")
   }
@@ -936,32 +945,22 @@ accept_or_reject <- function(prop, mcmc, data, update_e, update_g, update_m, has
 
   if(length(update_e) > 0){
 
-    if(parallelize){
-      prop$e_lik[update_e] <- unlist(parallel::mclapply(update_e, e_lik_personal, mcmc = prop, data = data, mc.cores = data$n_subtrees))
-    }else{
-      prop$e_lik[update_e] <- sapply(update_e, e_lik_personal, mcmc = prop, data = data)
-    }
+    js <- anc_to_js(prop$h, update_e)
+    prop$e_lik[update_e] <- mapply(e_lik_personal, update_e, js, MoreArgs = list(mcmc = prop, data = data))
 
   }
 
   if(length(update_g) > 0){
 
-    if(parallelize){
-      prop$g_lik[update_g] <- unlist(parallel::mclapply(update_g, g_lik, mcmc = prop, data = data, mc.cores = data$n_subtrees))
-    }else{
-      prop$g_lik[update_g] <- sapply(update_g, g_lik, mcmc = prop, data = data)
-    }
-
+    js <- anc_to_js(prop$h, update_g)
+    prop$g_lik[update_g] <- mapply(g_lik, update_g, js, MoreArgs = list(mcmc = prop, data = data))
 
   }
 
   if(length(update_m) > 0){
 
-    if(parallelize){
-      prop$m_lik[update_m] <- unlist(parallel::mclapply(update_m, m_lik, mcmc = prop, data = data, mc.cores = data$n_subtrees))
-    }else{
-      prop$m_lik[update_m] <- sapply(update_m, m_lik, mcmc = prop, data = data)
-    }
+    js <- anc_to_js(prop$h, update_m)
+    prop$m_lik[update_m] <- mapply(m_lik, update_m, js, MoreArgs = list(mcmc = prop, data = data))
 
   }
 
