@@ -59,50 +59,58 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
       message(paste("Parallelizing over", length(mcmcs), "cores..."))
     }
 
-    ## Attempt at foolproof parallelization: write each element of mcmcs to its own .RData file, then run in parallel
-    dir.create("tmp")
+    # Parallelize or not
+    if(length(mcmcs) > 1){
+      ## Foolproof parallelization: write each element of mcmcs to its own .RData file, then run in parallel
+      dir.create("tmp")
 
-    for (j in 1:length(mcmcs)) {
-      m0 <- mcmcs[[j]]
-      d0 <- datas[[j]]
-      save(m0, file = paste0("tmp/mcmcs_", j, ".RData"))
-      save(d0, file = paste0("tmp/datas_", j, ".RData"))
+      for (j in 1:length(mcmcs)) {
+        m0 <- mcmcs[[j]]
+        d0 <- datas[[j]]
+        save(m0, file = paste0("tmp/mcmcs_", j, ".RData"))
+        save(d0, file = paste0("tmp/datas_", j, ".RData"))
+      }
+
+      # Command to run all these in parallel
+      cmd <- paste("Rscript", system.file("local_mcmc_script.R", package = "juniper0"), 1:length(mcmcs))
+      cmd <- paste(cmd, collapse = " & ")
+      cmd <- paste(cmd, "& wait")
+
+      # Run in parallel
+      system(cmd, wait = T)
+
+      # Collect results
+      all_res <- list()
+      for (j in 1:length(mcmcs)) {
+        load(paste0("tmp/res_", j, ".RData"))
+        all_res[[j]] <- res
+      }
+
+      # Delete the temporary directory
+      unlink("tmp", recursive=TRUE)
+
+      # ...or run using parallel package in R...
+      # all_res <- parallel::mclapply(
+      #   1:length(mcmcs),
+      #   function(i, mcmcs, datas){
+      #     local_mcmc(mcmcs[[i]], datas[[i]])
+      #   },
+      #   mcmcs = mcmcs,
+      #   datas = datas,
+      #   mc.set.seed = F,
+      #   mc.cores = length(mcmcs)
+      # )
+
+    }else{
+
+      #...or run in series
+
+      all_res <- list()
+      for (j in 1:length(mcmcs)) {
+        all_res[[j]] <- local_mcmc(mcmcs[[j]], datas[[j]])
+      }
     }
 
-    # Command to run all these in parallel
-    cmd <- paste("Rscript", system.file("local_mcmc_script.R", package = "juniper0"), 1:length(mcmcs))
-    cmd <- paste(cmd, collapse = " & ")
-    cmd <- paste(cmd, "& wait")
-
-    # Run in parallel
-    system(cmd, wait = T)
-
-    # Collect results
-    all_res <- list()
-    for (j in 1:length(mcmcs)) {
-      load(paste0("tmp/res_", j, ".RData"))
-      all_res[[j]] <- res
-    }
-
-    # Delete the temporary directory
-    unlink("tmp", recursive=TRUE)
-
-    # ...or run using parallel package in R...
-    # all_res <- parallel::mclapply(
-    #   1:length(mcmcs),
-    #   function(i, mcmcs, datas){
-    #     local_mcmc(mcmcs[[i]], datas[[i]])
-    #   },
-    #   mcmcs = mcmcs,
-    #   datas = datas,
-    #   mc.set.seed = F,
-    #   mc.cores = length(mcmcs)
-    # )
-    #...or run in series
-    # all_res <- list()
-    # for (j in 1:length(mcmcs)) {
-    #   all_res[[j]] <- local_mcmc(mcmcs[[j]], datas[[j]])
-    # }
 
     # Amalgamate results of parallel MCMC run
     amalgam <- amalgamate(all_res, mcmcs, datas, mcmc, data)
