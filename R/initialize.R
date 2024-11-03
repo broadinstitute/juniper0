@@ -97,8 +97,8 @@ initialize <- function(
     # Fill the ref_genome's missing sites with "A". Again, this doesn't matter, since genotype() will update all of them
     ref_genome[[1]][!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))] <- base_to_raw("A")
 
-    # Going to initialize time of collection to 10 days before earliest sequence collection
-    s_ref <- min(s_nonref) - 10
+    # Going to initialize time of collection to 1 generation interval and 1 sojourn interval before earliest sequence collection
+    s_ref <- min(s_nonref) - (a_g / lambda_g) - (a_s / lambda_s)
   }
 
   # Length of genome
@@ -334,8 +334,13 @@ initialize <- function(
 
   # Time of first infection is one average sojourn interval pre-test
   # Data jittered for intialization of transmission network
-  mcmc$seq[2:n] <- as.list(data$s[2:n] - (mcmc$a_s / mcmc$lambda_s) + rnorm(n-1, 0, 0.01))
-
+  # Cannot be earlier than tmrca!
+  mcmc$seq[2:n] <- as.list(
+    pmax(
+      data$s[2:n] - (mcmc$a_s / mcmc$lambda_s) + rnorm(n-1, 0, 0.01),
+      tmrca + 0.01
+    )
+  )
 
   # Times at which mutations occur
   mcmc$tmu <- list()
@@ -429,8 +434,6 @@ initialize <- function(
     # Update genotype at who
     # This will also update mutation times leading into "who"
     mcmc <- genotype(mcmc, data, who)[[1]]
-
-    print(i)
 
   }
 
