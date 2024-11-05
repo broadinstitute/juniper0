@@ -160,6 +160,14 @@ e_lik_personal <- function(mcmc, data, i, js = NULL){
   tinfmin <- min(ttree[,1])
   # Length of wbar
   wbar_len <- round((-tinfmin)/0.1)
+
+  ### TEMPORARY:
+  # If we need to access values of wbar further back than the earliest entry of wbar0, reject the move (likelihood = -Inf)
+  if((length(mcmc$wbar) - wbar_len + 1) < 1){
+    return(-Inf)
+  }
+  # Later on: better way to do this is update wbar as we need to access more and more entries
+
   # Relevant entries of wbar
   wbar0 <- mcmc$wbar[(length(mcmc$wbar) - wbar_len + 1):length(mcmc$wbar)]
 
