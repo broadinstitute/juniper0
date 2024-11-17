@@ -506,7 +506,13 @@ initialize <- function(
     }
   }
 
-  data$t_min <- (min(data$s, na.rm = T) - 10) * 10 # Set minimum time of anything happening to 10 times earlier than 10 less than the min sampling time
+  if(data$rooted){
+    data$t_min <- min(data$s) - 20 * (mcmc$a_s / mcmc$lambda_s)
+  }else{
+    data$t_min <- (min(data$s, na.rm = T) - 10) * 10 # Set minimum time of anything happening to 10 times earlier than 10 less than the min sampling time
+  }
+
+  # Can consider updating this by forcing it to converge?
   mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
 
   # Also track the epidemiological and genomic likelihoods, and prior
