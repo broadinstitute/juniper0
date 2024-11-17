@@ -14,7 +14,6 @@ Depends:
 	ape,
 	ggplot2,
 	ggraph,
-	TransPhylo,
 	extraDistr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
