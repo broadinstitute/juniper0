@@ -437,7 +437,11 @@ initialize <- function(
 
   }
 
-  # Resample seq
+  ## Resample seq for each i, and at the same time, check parsimony at each i
+
+  # Get non-parsimonious hosts
+  nonparsimonious <- integer(0)
+
   for (i in ord) {
 
     if(i != 1){
@@ -451,19 +455,46 @@ initialize <- function(
 
     # Check parsimony while we're at it
     if(!genotype(mcmc, data, i, check_parsimony = T)){
+      nonparsimonious <- c(nonparsimonious, i)
+    }
+  }
 
+  # Correct parsimony errors
+  nonparsimonious <- list(sort(nonparsimonious))
+
+  while (length(nonparsimonious[[length(nonparsimonious)]]) > 0) {
+    # New not parsimonious
+    new <- integer(0)
+    for(i in nonparsimonious[[length(nonparsimonious)]]){
       mcmc <- genotype(mcmc, data, i)[[1]]
       neighbors <- which(mcmc$h == i)
       if(i != 1){
         neighbors <- c(mcmc$h[i], neighbors)
       }
 
-      if(!all(sapply(neighbors, genotype, mcmc=mcmc, data=data, check_parsimony = T))){
-        print(i)
-        print("parsimony error in initialization")
+      for (j in neighbors) {
+        if(!genotype(mcmc, data, j, check_parsimony = T)){
+          new <- c(new, j)
+        }
       }
     }
+
+    if(any(sapply(nonparsimonious, function(x){identical(x, new)}))){
+      print(nonparsimonious)
+      print(new)
+      stop("could not find locally parsimonious initial configuration.")
+    }
+
+    nonparsimonious <- c(nonparsimonious, list(sort(unique(new))))
   }
+
+  # Double-check we've indeed achieved local parsimony
+  for (i in 1:n) {
+    if(!genotype(mcmc, data, i, check_parsimony = T)){
+      stop("Failed local parsimony")
+    }
+  }
+
 
   ## Check that no SNVs are listed in "dropout"
   for (i in 1:n) {
@@ -475,7 +506,7 @@ initialize <- function(
     }
   }
 
-  data$t_min <- min(data$s, na.rm = T) * 10
+  data$t_min <- (min(data$s, na.rm = T) - 10) * 10 # Set minimum time of anything happening to 10 times earlier than 10 less than the min sampling time
   mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
 
   # Also track the epidemiological and genomic likelihoods, and prior

@@ -175,14 +175,26 @@ NumericVector wbar(double tinf, double dateT, double rOff, double pOff, double p
   NumericVector gam = dgamma(as<NumericVector>(seq)*delta_t,shGen,scGen);
   double sumPrev = 0.5 * gam[0];
   out[n-1]=std::min(1.0,F[n-1]+sumPrev*delta_t);
+  bool converged = false;
   for(int i=n-1; i>0; --i){
-    w[i] = (1-pi2[i]) * pow((1-pOff)/(1-pOff*out[i]), rOff);
 
-    sumPrev = 0.0;
-    for(int j=0; j<n-i; ++j)
-      sumPrev += gam[j]*w[i+j];
-    sumPrev += 0.5 * gam[n-i];
-    out[i-1] = std::min(1.0,F[i-1] + sumPrev*delta_t);
+    if(converged){
+      out[i-1] = out[i];
+    }else{
+      w[i] = (1-pi2[i]) * pow((1-pOff)/(1-pOff*out[i]), rOff);
+
+      sumPrev = 0.0;
+      for(int j=0; j<n-i; ++j)
+        sumPrev += gam[j]*w[i+j];
+      sumPrev += 0.5 * gam[n-i];
+      out[i-1] = std::min(1.0,F[i-1] + sumPrev*delta_t);
+
+      if(out[i-1] == out[i]){
+        if(out[i-1] < 0.999){
+          converged = true;
+        }
+      }
+    }
   }
   return log(out);
 }

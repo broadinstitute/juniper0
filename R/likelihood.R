@@ -161,17 +161,20 @@ e_lik_personal <- function(mcmc, data, i, js = NULL){
   # Length of wbar
   wbar_len <- round((-tinfmin)/0.1)
 
-  ### TEMPORARY:
-  # If we need to access values of wbar further back than the earliest entry of wbar0, reject the move (likelihood = -Inf)
-  if((length(mcmc$wbar) - wbar_len + 1) < 1){
+  # If we need to access values of wbar further back than the earliest entry of wbar0, and if wbar hasn't converged, reject the move (likelihood = -Inf)
+  if((length(mcmc$wbar) < wbar_len) & (mcmc$wbar[1] != mcmc$wbar[2])){
     return(-Inf)
   }
-  # Later on: better way to do this is update wbar as we need to access more and more entries
 
   # Relevant entries of wbar
-  wbar0 <- mcmc$wbar[(length(mcmc$wbar) - wbar_len + 1):length(mcmc$wbar)]
-
-  #print(wbar0)
+  if(wbar_len > length(mcmc$wbar)){
+    wbar0 <- c(
+      rep(mcmc$wbar[1], wbar_len - length(mcmc$wbar)),
+      mcmc$wbar
+    )
+  }else{
+    wbar0 <- mcmc$wbar[(length(mcmc$wbar) - wbar_len + 1):length(mcmc$wbar)]
+  }
 
   out <- probTTree(
     ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, 0, wbar0, delta_t = 0.1
