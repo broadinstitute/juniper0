@@ -29,13 +29,19 @@ global_mcmc <- function(mcmc, data){
     mcmc <- move_mu(mcmc, data)
   }
 
+  if(!data$fixed_N_eff){
+    mcmc <- move_N_eff(mcmc, data)
+  }
+
+  # if(!data$fixed_mu & !data$fixed_N_eff){
+  #   mcmc <- move_mu_N_eff(mcmc, data)
+  # }
+
   # Move 2
   mcmc <- move_pi(mcmc, data)
 
   # Move 3
   mcmc <- move_R(mcmc, data)
-
-  #mcmc <- move_N_eff(mcmc, data)
 
 
   return(mcmc)

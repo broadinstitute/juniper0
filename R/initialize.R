@@ -6,8 +6,6 @@
 #' @param n_global Number of global iterations. Defaults to 100.
 #' @param n_local Number of local iterations per global iteration. Defaults to 100.
 #' @param sample_every Number of local iterations per one sample. Must divide n_local.
-#' @param init_mst Should we initialize to a minimum spanning tree? (Set to FALSE for large datasets due to long runtime.)
-#' @param init_ancestry If TRUE, the initial ancestry is specified in a one-column .csv file called ancestry.csv, where the entry in the ith row is the initial ancestor of host i.
 #' @param rooted If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.
 #' @param record Parameters to be recorded in the MCMC output.
 #' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
@@ -18,8 +16,9 @@
 #' @param lambda_s Rate parameter, sojourn interval. Defaults to 1.
 #' @param psi Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
-#' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.
+#' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at its initial value for the duration of the algorithm.
 #' @param N_eff The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).
+#' @param fixed_N_eff If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.
 #' @param safety Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.
 #' @return The initial configuration of the Markov Chain.
 #' @export
@@ -28,8 +27,6 @@ initialize <- function(
     n_global = 100, # Number of global moves
     n_local = 100, # Number of local moves per global move
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
-    init_mst = FALSE, # Should we initialize to a minimum spanning tree?
-    init_ancestry = FALSE, # Specify the starting ancestry
     rooted = FALSE, # Is the root of the transmission network fixed at the ref sequence?
     N = NA, # Population size
     record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"), # Which aspects of mcmc do we want to record
@@ -43,6 +40,7 @@ initialize <- function(
     init_mu = 2e-5,
     fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
     N_eff = log(100), # Effective population size, within host
+    fixed_N_eff = F,
     safety = NA
 ){
 
@@ -131,15 +129,6 @@ initialize <- function(
     n_subtrees <- max(min(parallel::detectCores(), floor(n / 25)), 1) # Minimum 25 nodes per subtree
   }
 
-  # Prevent MST initialization when dataset is large
-  if(init_mst & n > 1000){
-    stop("Dataset is too large to use init_mst = TRUE. Specify a strating configuration by using init_ancestry, or initialize to a star-shaped configuration by setting init_mst = FALSE.")
-  }
-
-  # Warn when using unrooted tree, unfixed mutation rate
-  # if(!rooted & !fixed_mu){
-  #   message("Note: Convergence may fail when rooted = FALSE and fixed_mu = FALSE, especially if samples span a short date range. Consider setting one of these arguments to TRUE.")
-  # }
 
   # Names of sequences
   names <- gsub("\\|.*", "", names(fasta))
@@ -242,6 +231,8 @@ initialize <- function(
   data$rooted <- rooted
   data$init_mu <- init_mu
   data$fixed_mu <- fixed_mu
+  data$init_N_eff <- N_eff
+  data$fixed_N_eff <- fixed_N_eff
   data$names <- names
   data$s_max <- s_max
   data$safety <- safety

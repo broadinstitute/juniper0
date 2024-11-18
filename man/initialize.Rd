@@ -9,8 +9,6 @@ initialize(
   n_global = 100,
   n_local = 100,
   sample_every = 100,
-  init_mst = FALSE,
-  init_ancestry = FALSE,
   rooted = FALSE,
   N = NA,
   record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"),
@@ -24,6 +22,7 @@ initialize(
   init_mu = 2e-05,
   fixed_mu = F,
   N_eff = log(100),
+  fixed_N_eff = F,
   safety = NA
 )
 }
@@ -35,10 +34,6 @@ initialize(
 \item{n_local}{Number of local iterations per global iteration. Defaults to 100.}
 
 \item{sample_every}{Number of local iterations per one sample. Must divide n_local.}
-
-\item{init_mst}{Should we initialize to a minimum spanning tree? (Set to FALSE for large datasets due to long runtime.)}
-
-\item{init_ancestry}{If TRUE, the initial ancestry is specified in a one-column .csv file called ancestry.csv, where the entry in the ith row is the initial ancestor of host i.}
 
 \item{rooted}{If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.}
 
@@ -60,9 +55,11 @@ initialize(
 
 \item{init_mu}{Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.}
 
-\item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at this value for the duration of the algorithm.}
+\item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at its initial value for the duration of the algorithm.}
 
 \item{N_eff}{The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).}
+
+\item{fixed_N_eff}{If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.}
 
 \item{safety}{Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.}
 }

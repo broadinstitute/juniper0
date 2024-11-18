@@ -345,6 +345,7 @@ genotype <- function(mcmc, data, i, output = "all", check_parsimony = F){
         # Index of iSNV in i
         ind_isnv <- match(p, data$snvs[[i]]$isnv$pos)
 
+
         # If the best choice(s) of nucleotide are among isnv calls, update parsimony to reflect this
         parsimonious <- intersect(
           parsimonious,

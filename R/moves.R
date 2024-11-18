@@ -216,22 +216,45 @@ move_mu <- function(mcmc, data){
   prop <- mcmc
   prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 10)
 
+  if(prop$mu <= 0){
+    return(mcmc)
+  }
+
   update_e <- integer(0)
   update_g <- 1:mcmc$n
   update_m <- 1:mcmc$n
   return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 }
 
-## Update p
+## Update N_eff
 move_N_eff <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$N_eff <- rnorm(1, mcmc$N_eff, 0.5)
+  prop$N_eff <- rnorm(1, mcmc$N_eff, data$init_N_eff / 10)
 
-  prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+  if(prop$N_eff <= 0){
+    return(mcmc)
+  }
 
-  update <- 1:mcmc$n
-  return(accept_or_reject(prop, mcmc, data, update, update, update))
+  update_e <- integer(0)
+  update_g <- 1:mcmc$n
+  update_m <- integer(0)
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
+}
+
+## Update both simultaneously
+move_mu_N_eff <- function(mcmc, data){
+  # Proposal
+  prop <- mcmc
+  scale <- exp(rnorm(1, 0, 0.05))
+  prop$mu <- mcmc$mu * scale
+  prop$N_eff <- mcmc$N_eff * scale
+
+
+  update_e <- integer(0)
+  update_g <- 1:mcmc$n
+  update_m <- 1:mcmc$n
+  return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m))
 }
 
 ## Update R
