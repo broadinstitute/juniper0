@@ -507,7 +507,7 @@ initialize <- function(
   }
 
   if(data$rooted){
-    data$t_min <- min(data$s) - 20 * (mcmc$a_s / mcmc$lambda_s)
+    data$t_min <- min(data$s, na.rm = T) - 20 * (mcmc$a_s / mcmc$lambda_s)
   }else{
     data$t_min <- (min(data$s, na.rm = T) - 10) * 10 # Set minimum time of anything happening to 10 times earlier than 10 less than the min sampling time
   }
