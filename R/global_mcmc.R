@@ -38,11 +38,14 @@ global_mcmc <- function(mcmc, data){
   # }
 
   # Move 2
-  mcmc <- move_pi(mcmc, data)
+  if(!data$fixed_pi){
+    mcmc <- move_pi(mcmc, data)
+  }
 
   # Move 3
-  mcmc <- move_R(mcmc, data)
-
+  if(!data$fixed_R){
+    mcmc <- move_R(mcmc, data)
+  }
 
   return(mcmc)
 }
@@ -182,12 +185,19 @@ breakdown <- function(mcmc, data, old_roots){
 
     datas[[i]]$init_mu <- data$init_mu
     datas[[i]]$fixed_mu <- data$fixed_mu
+    datas[[i]]$init_N_eff <- data$init_N_eff
+    datas[[i]]$fixed_N_eff <- data$fixed_N_eff
+    datas[[i]]$init_R <- data$init_R
+    datas[[i]]$fixed_R <- data$fixed_R
+    datas[[i]]$init_pi <- data$init_pi
+    datas[[i]]$fixed_pi <- data$fixed_pi
 
     # No need to store names
 
     datas[[i]]$s_max <- data$s_max
     datas[[i]]$t_min <- data$t_min
     datas[[i]]$safety <- data$safety
+    datas[[i]]$split_bottlenecks <- data$split_bottlenecks
 
     ## SAFETY MODE
     if(!is.na(data$safety)){

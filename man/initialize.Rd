@@ -22,8 +22,9 @@ initialize(
   init_mu = 2e-05,
   fixed_mu = F,
   N_eff = log(100),
-  fixed_N_eff = F,
-  safety = NA
+  fixed_N_eff = FALSE,
+  safety = NA,
+  split_bottlenecks = FALSE
 )
 }
 \arguments{
@@ -62,6 +63,8 @@ initialize(
 \item{fixed_N_eff}{If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.}
 
 \item{safety}{Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.}
+
+\item{split_bottlenecks}{If TRUE, likelihood accounts for split bottlenecks (new beta feature). Defaults to FALSE.}
 }
 \value{
 The initial configuration of the Markov Chain.

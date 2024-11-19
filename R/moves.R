@@ -32,6 +32,10 @@ move_seq <- function(mcmc, data, also_resample_tmu){
   update_g <- mcmc$h[i]
   update_m <- integer(0)
 
+  if(data$split_bottlenecks){
+    update_g <- c(update_g, i)
+  }
+
   prop <- resample_seq(mcmc, data, i, fix_latest_host = TRUE, also_resample_tmu = also_resample_tmu)
 
   hastings <- prop[[2]] - prop[[3]]
@@ -53,6 +57,10 @@ move_tmu <- function(mcmc, data){
   update_g <- mcmc$h[i]
   update_e <- integer(0)
   update_m <- integer(0)
+
+  if(data$split_bottlenecks){
+    update_g <- c(update_g, i)
+  }
 
   return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, hastings))
 }
@@ -187,9 +195,12 @@ move_w_t <- function(mcmc, data, recursive = F){
     update <- unique(c(1, update))
   }
 
+  update_g <- update
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, js))
+  }
 
-
-  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings))
+  return(accept_or_reject(prop, mcmc, data, update_e = update, update_g = update_g, update_m = update, hastings))
 }
 
 ## Update b using a N(0,0.01) proposal density
@@ -338,6 +349,10 @@ move_genotype <- function(mcmc, data){
   update_g <- update
   update_m <- update
 
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, js))
+  }
+
   return(accept_or_reject(prop, mcmc, data, update_e, update_g, update_m, hastings, check_parsimony = to_check))
 }
 
@@ -471,7 +486,12 @@ move_h_step <- function(mcmc, data, upstream = TRUE){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings = hastings, check_parsimony = c(h_old, h_new, i, js)))
+  update_g <- update
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, js))
+  }
+
+  return(accept_or_reject(prop, mcmc, data, update, update_g, update, hastings = hastings, check_parsimony = c(h_old, h_new, i, js)))
 }
 
 ## Global change in ancestor
@@ -584,7 +604,12 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   update <- c(h_old, h_new, i)
 
-  return(accept_or_reject(prop, mcmc, data, update, update, unique(c(update, down, up, js)), hastings, check_parsimony = unique(c(down, up, i, js))))
+  update_g <- update
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, js))
+  }
+
+  return(accept_or_reject(prop, mcmc, data, update, update_g, unique(c(update, down, up, js)), hastings, check_parsimony = unique(c(down, up, i, js))))
 
 }
 
@@ -687,13 +712,12 @@ move_swap <- function(mcmc, data, exchange_children = FALSE){
 
   update <- c(h, i, j)
 
-  # print(which(prop$h == 11))
-  # print(prop$h[11])
-  # print(prop$seq[[11]])
-  # print(prop$seq[[prop$h[11]]])
-  # print(prop$seq[which(prop$h == 11)])
+  update_g <- update
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, children_i, children_j))
+  }
 
-  return(accept_or_reject(prop, mcmc, data, update, update, update, hastings, check_parsimony = to_check))
+  return(accept_or_reject(prop, mcmc, data, update, update_g, update, hastings, check_parsimony = to_check))
 
 }
 
@@ -1041,7 +1065,12 @@ move_create <- function(mcmc, data, upstream = T, biassed = F){
     to_check <- c(h, i, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, update, unique(c(update, to_check)), hastings, check_parsimony = to_check))
+  update_g <- update
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, js))
+  }
+
+  return(accept_or_reject(prop, mcmc, data, update, update_g, unique(c(update, to_check)), hastings, check_parsimony = to_check))
 }
 
 # upstream = T here reverses move_create(... upstream = T) and vice versa
@@ -1395,5 +1424,10 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
     to_check <- c(h, js)
   }
 
-  return(accept_or_reject(prop, mcmc, data, update, update, unique(c(update, to_check)), hastings, check_parsimony = to_check))
+  update_g <- update
+  if(data$split_bottlenecks){
+    update_g <- unique(c(update_g, js))
+  }
+
+  return(accept_or_reject(prop, mcmc, data, update, update_g, unique(c(update, to_check)), hastings, check_parsimony = to_check))
 }

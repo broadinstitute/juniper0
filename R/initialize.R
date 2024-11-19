@@ -17,9 +17,14 @@
 #' @param psi Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
 #' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at its initial value for the duration of the algorithm.
-#' @param N_eff The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).
+#' @param init_N_eff The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).
 #' @param fixed_N_eff If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.
+#' @param init_R Initial value of the reproductive number. Defaults to 1.
+#' @param fixed_R If FALSE (the default), the reproductive number is estimated. If TRUE, the reproductive number is fixed at its initial value for the duration of the algorithm.
+#' @param init_pi Initial value of the sampling rate. Defaults to 0.5.
+#' @param fixed_pi If FALSE (the default), the sampling rate is estimated. If TRUE, the sampling rate is fixed at its initial value for the duration of the algorithm.
 #' @param safety Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.
+#' @param split_bottlenecks If TRUE, likelihood accounts for split bottlenecks (new beta feature). Defaults to FALSE.
 #' @return The initial configuration of the Markov Chain.
 #' @export
 initialize <- function(
@@ -38,10 +43,15 @@ initialize <- function(
     lambda_s = 1, # Rate parameter, sojourn interval
     psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
     init_mu = 2e-5,
-    fixed_mu = F, # Should mutation rate be fixed? Defaults to FALSE.
-    N_eff = log(100), # Effective population size, within host
-    fixed_N_eff = F,
-    safety = NA
+    fixed_mu = FALSE, # Should mutation rate be fixed? Defaults to FALSE.
+    init_N_eff = log(100), # Effective population size, within host
+    fixed_N_eff = FALSE,
+    init_R = 1,
+    fixed_R = FALSE,
+    init_pi = 0.5,
+    fixed_pi = FALSE,
+    safety = NA,
+    split_bottlenecks = FALSE
 ){
 
   ## Filters
@@ -81,30 +91,36 @@ initialize <- function(
       stop("A ref.fasta file must be provided in the input_data directory when rooted = TRUE")
     }
 
-    if(any(
-      !(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
-    )){
-      stop("ref.fasta cannot have any missing positions")
-    }
+    # if(any(
+    #   !(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
+    # )){
+    #   stop("ref.fasta cannot have any missing positions")
+    # }
 
   }else{
     earliest <- which.min(s_nonref)
     ref_genome <- fasta[earliest]
     names(ref_genome) <- "ref_genome"
 
-    # Fill the ref_genome's missing sites with "A". Again, this doesn't matter, since genotype() will update all of them
-    ref_genome[[1]][!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))] <- base_to_raw("A")
-
     # Going to initialize time of collection to 1 generation interval and 1 sojourn interval before earliest sequence collection
     s_ref <- min(s_nonref) - (a_g / lambda_g) - (a_s / lambda_s)
   }
+
+  # Fill the ref_genome's missing sites with "A". This is simply a placeholder, since genotype() will update all of them
+  ref_missing <- which(!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24))))
+  ref_genome[[1]][!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))] <- base_to_raw("A")
 
   # Length of genome
   n_bases <- length(ref_genome[[1]])
 
   # The first genome is itself the ref genome
   fasta <- c(ref_genome, fasta)
-  s <- c(as.Date(NA), s_nonref) # Ref genome always treated as unsampled
+  if(rooted){
+    s <- c(s_ref, s_nonref)
+  }else{
+    s <- c(as.Date(NA), s_nonref)
+  }
+
 
   # The earliest case to be collected must be offset by 1, since we've appended the reference genome in front
   if(!rooted){
@@ -129,16 +145,15 @@ initialize <- function(
     n_subtrees <- max(min(parallel::detectCores(), floor(n / 25)), 1) # Minimum 25 nodes per subtree
   }
 
+  if(split_bottlenecks & n_subtrees > 1){
+    stop("Split bottlenecks are not yet available in parallel. Set split_bottlenecks = FALSE or n_subtrees = 1.")
+  }
 
   # Names of sequences
   names <- gsub("\\|.*", "", names(fasta))
 
   # VCF files present
   vcfs <- list.files(paste0("./", indir, "/vcf"))
-
-
-
-
 
   ## List of SNVs present per sample
   message("Processing FASTA and VCF files...")
@@ -188,6 +203,10 @@ initialize <- function(
 
   close(pb)
 
+  # Update missing positions in 1st sequence
+  if(rooted){
+    snvs[[1]]$missing <- ref_missing
+  }
 
   # Compile vectors of all positions with SNVs (may have duplicates) and all SNVs (unique)
   message("Compiling list of mutations...")
@@ -231,13 +250,16 @@ initialize <- function(
   data$rooted <- rooted
   data$init_mu <- init_mu
   data$fixed_mu <- fixed_mu
-  data$init_N_eff <- N_eff
+  data$init_N_eff <- init_N_eff
   data$fixed_N_eff <- fixed_N_eff
+  data$init_R <- init_R
+  data$fixed_R <- fixed_R
+  data$init_pi <- init_pi
+  data$fixed_pi <- fixed_pi
   data$names <- names
   data$s_max <- s_max
   data$safety <- safety
-
-
+  data$split_bottlenecks <- split_bottlenecks
 
   # Later: could move elements of "data" that aren't used in MCMC to a new "config" list
 
@@ -312,16 +334,20 @@ initialize <- function(
   #vals <- opt_R_pi(data$s - tmrca, mcmc$a_g, mcmc$lambda_g, mcmc$a_s, mcmc$lambda_s)
   #print(vals)
 
-  mcmc$R <- 1
-  mcmc$pi <- 0.5
+  mcmc$R <- init_R
+  mcmc$pi <- init_pi
 
   #mcmc$R <- vals[1] # Reproductive number
   #mcmc$pi <- vals[2] # Probability of sampling
-  mcmc$N_eff <- N_eff
+  mcmc$N_eff <- init_N_eff
 
   # Sequence of times at which the hosts along the edge leading into i were sampled
   mcmc$seq <- list()
-  mcmc$seq[[1]] <- tmrca
+  if(rooted){
+    mcmc$seq[[1]] <- data$s[1] - (mcmc$a_s / mcmc$lambda_s) + rnorm(1, 0, 0.01)
+  }else{
+    mcmc$seq[[1]] <- tmrca
+  }
 
   # Time of first infection is one average sojourn interval pre-test
   # Data jittered for intialization of transmission network
@@ -367,9 +393,8 @@ initialize <- function(
     data$snvs[[i]]$snv <- NULL
   }
 
-  if(!data$rooted){
-    mcmc <- genotype(mcmc, data, 1)[[1]]
-  }
+  mcmc <- genotype(mcmc, data, 1)[[1]]
+
 
   ## Re-initialize h[i] to nearest genetic neighbor to i infected before i
   ## Can use shift_upstream

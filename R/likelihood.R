@@ -140,10 +140,90 @@ g_lik <- function(mcmc, data, i, js = NULL){
     return(0)
   }
 
+  # Log likelihood
+  out <- 0
+
   # iSNVs detected in i
   isnv_a1 <- data$snvs[[i]]$isnv$a1
   isnv_pos <- data$snvs[[i]]$isnv$pos
   isnv_a2 <- data$snvs[[i]]$isnv$a2
+
+  # If using split bottleneck feature: which of these bottlenecks are split?
+  if(data$split_bottlenecks & i != 1){
+    h <- mcmc$h[i]
+    if(h <= data$n_obs){
+      if(data$vcf_present[h]){
+
+        # Get iSNVs in h
+        h_a1 <- data$snvs[[h]]$isnv$a1
+        h_pos <- data$snvs[[h]]$isnv$pos
+        h_a2 <- data$snvs[[i]]$isnv$a2
+
+        # Filter to iSNVs that are also in i
+        shared <- which(h_pos %in% isnv_pos)
+        h_a1 <- h_a1[shared]
+        h_pos <- h_pos[shared]
+        h_a2 <- h_a2[shared]
+
+        # Mapping onto positions of iSNVs in i
+        mapping <- match(h_pos, isnv_pos)
+
+        # Indices of isnv_pos that are the same iSNVs in h
+        matched <- mapping[which(h_a1 == isnv_a1[mapping] & h_a2 == isnv_a2[mapping])]
+
+        # Get list of shared iSNVs
+        shared_a1 <- isnv_a1[matched]
+        shared_pos <- isnv_pos[matched]
+        shared_a2 <- isnv_a2[matched]
+
+        if(length(shared_pos) > 0){
+          # A split bottleneck is only possible when all mutations along the branch from h to i appear as shared iSNVs
+          # There can be no fixed mutations along said branch
+
+          ## Is a split bottleneck valid?
+          # We will say that there is indeed a split bottleneck (valid = TRUE) whenever imposing one decreases the total number of needed mutations
+          # The number of mutations that get eliminated is length(shared_pos)
+          # The number of mutations we pay in penalty is the mutations along the branch from h to i that are not involved in the split bottleneck
+          # We count these here
+          involved <- 0
+          if(length(mcmc$subs$pos[[i]]) > 0){
+            for (k in 1:length(mcmc$subs$pos[[i]])) {
+              if(mcmc$subs$pos[[i]][k] %in% shared_pos){
+                ind <- match(mcmc$subs$pos[[i]][k], shared_pos)
+
+                if(all(c(mcmc$subs$from[[i]][k], mcmc$subs$to[[i]][k]) %in% c(shared_a1[ind], shared_a2[ind]))){
+                  # If the two nucleotides involved in the substitution on the branch from h to i match the two alleles in the shared iSNV, this substitution is involved in the split bottleneck
+                  involved <- involved + 1
+                }
+              }
+            }
+          }
+          uninvolved <- length(mcmc$subs$pos[[i]]) - involved
+
+          # Declare a boolean named "valid": TRUE if we're taking the bottleneck infecting i to be split
+          valid <- length(shared_pos) > uninvolved
+
+          if(valid){
+            # Revise list of iSNVs in i to those that are de novo in i
+            keep <- setdiff(1:length(isnv_pos), matched)
+            isnv_a1 <- isnv_a1[keep]
+            isnv_pos <- isnv_pos[keep]
+            isnv_a2 <- isnv_a2[keep]
+
+            # As an approximation, penalize by cost of additional branch from h to i with uninvolved mutations (integrating out their time)
+            delta_t <- mcmc$seq[[i]][1] - mcmc$seq[[h]][1]
+            out <- out +
+              (data$n_bases - uninvolved) * dpois(0, mcmc$mu * delta_t, log = T) + # Jukes-Cantor probability of 0 mutations on a branch of length delta_t
+              uninvolved * dpois(1, mcmc$mu * delta_t, log = T) # Jukes-Cantor probability of 1 mutation on a branch of length delta_t
+          }
+        }else{
+          # If no shared iSNVs, split bottleneck invalid
+          valid <- F
+        }
+      }
+    }
+  }
+
 
   # Proportion of the population that is a de novo iSNV
   freq <- data$snvs[[i]]$isnv$af1
@@ -174,6 +254,50 @@ g_lik <- function(mcmc, data, i, js = NULL){
     trans_isnv_to <- c(trans_isnv_to, mcmc$subs$to[[j]][keep])
     # And when?
     trans_isnv_time <- c(trans_isnv_time, mcmc$tmu[[j]][keep])
+  }
+
+  ## If accounting for split bottlenecks, delete mutations that are no longer necessary along outgoing branches
+  # Also, subtract out the likelihood of said mutations from m_lik calculation
+  if(data$split_bottlenecks & i != 1){
+    if(h <= data$n_obs){
+      if(data$vcf_present[h]){
+        if(valid){
+          if(length(trans_isnv_pos) > 0){
+            delete <- integer(0)
+
+            for (k in 1:length(trans_isnv_pos)) {
+              if(trans_isnv_pos[k] %in% shared_pos){
+
+                # Index in shared isnvs of this mutation on outgoing branch
+                ind <- match(trans_isnv_pos[k], shared_pos)
+
+                # Check if to/from are the same
+                if(all(c(trans_isnv_from[k], trans_isnv_to[k]) %in% c(shared_a1[ind], shared_a2[ind]))){
+
+                  # If this passes, no longer need outgoing mutation k
+                  delete <- c(delete, k)
+
+                  # Adjust log likelihood to remove one (explicit) mutation
+                  # Gives it a huge boost
+                  out <- out - log(mcmc$mu/3)
+                }
+              }
+            }
+
+            # Each outgoing branch from i has 1/2 probability of choosing correct ancestral virion
+            out <- out + length(js)*log(1/2)
+
+            # Delete iSNVs on the global phylogeny that are accounted for in split bottleneck
+            keep <- setdiff(1:length(trans_isnv_pos), delete)
+            trans_isnv_pos <- trans_isnv_pos[keep]
+            trans_isnv_from <- trans_isnv_from[keep]
+            trans_isnv_to <- trans_isnv_to[keep]
+            trans_isnv_time <- trans_isnv_time[keep]
+
+          }
+        }
+      }
+    }
   }
 
   # For each position p, index of minimum time at which there's a mutation at site p
@@ -220,10 +344,6 @@ g_lik <- function(mcmc, data, i, js = NULL){
     }
   }
 
-  # if(length(local_in_global) > 0){
-  #   print("yay")
-  # }
-
   if(length(isnv_pos) > 0){
     local_alone <- setdiff(1:length(isnv_pos), c(local_in_global, local_same_site))
   }else{
@@ -238,8 +358,7 @@ g_lik <- function(mcmc, data, i, js = NULL){
 
   ## REMEMBER: N_eff = lambda / rho
 
-  # Log likelihood contribution
-  out <- 0
+  ## Log likelihood contribution
 
   # For iSNVs observed in i that aren't accounted for on the global phylogeny, compute marginal probability of the denovo frequency
   out <- out + sum(dprop(freq[local_alone], mcmc$mu / mcmc$N_eff, log = T) + log(1/3)) # Choice of "to" nucleotide is 1/3

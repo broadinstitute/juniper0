@@ -86,7 +86,7 @@ summarize <- function(results, burnin = 0.2){
   # Visualization
   plot(out$log_likelihood, type = "l", main = "Log-Likelihood", xlab = "Iteration", ylab = "Log-Likelihood")
   hist(out$mu, xlab = "Value", main = "Evolution Rate (subs/site/day)")
-  hist(out$N_eff, xlab = "Value", main = "Effective Sample Size")
+  hist(out$N_eff, xlab = "Value", main = "Within-host Effective Population Size")
   hist(out$pi, xlab = "Value", main = "Sampling Rate")
   hist(out$R, xlab = "Value", main = "Reproductive Number")
 
