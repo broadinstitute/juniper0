@@ -151,59 +151,59 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
       message(paste(r, "global iterations complete. Log-likelihood =", round(liks[r], 2)))
 
       #print(mcmc$w)
-       print(
-         paste0(
-           "Evolution rate: ",
-           signif(mcmc$mu, digits = 4),
-           " substitutions/site/day"
-         )
-       )
-       print(
-         paste0(
-           "Within-host effective population size: exp(",
-           signif(mcmc$N_eff, digits = 4),
-           " * t) virions after t days"
-         )
-       )
-       print(
-         paste0(
-           "Sampling rate: ",
-           signif(mcmc$pi, digits = 4)
-         )
-       )
-       print(
-         paste0(
-           "Reproductive number: ",
-           signif(mcmc$R, digits = 4)
-         )
-       )
-       print(
-         paste0(
-           "Total evolutionary time: ",
-           signif(tot_evo_time(mcmc, data) / data$n_bases, digits = 4),
-           " days"
-         )
-       )
-       print(
-         paste0(
-           "Total number of mutations: ",
-           length(unlist(mcmc$tmu))
-         )
-       )
-       print(
-         paste0(
-           "Number of included hosts: ",
-           length(unlist(mcmc$seq))
-         )
-       )
-       if(!data$rooted){
-         print(
-           paste0(
-             "Epidemic start date: ",
-             data$s_max + mcmc$seq[[1]]
-           )
-         )
-       }
+      print(
+        paste0(
+          "Evolution rate: ",
+          signif(mcmc$mu, digits = 4),
+          " substitutions/site/day"
+        )
+      )
+      print(
+        paste0(
+          "Within-host effective population size: exp(",
+          signif(mcmc$N_eff, digits = 4),
+          " * t) virions after t days"
+        )
+      )
+      print(
+        paste0(
+          "Sampling rate: ",
+          signif(mcmc$pi, digits = 4)
+        )
+      )
+      print(
+        paste0(
+          "Reproductive number: ",
+          signif(mcmc$R, digits = 4)
+        )
+      )
+      print(
+        paste0(
+          "Total evolutionary time: ",
+          signif(tot_evo_time(mcmc, data) / data$n_bases, digits = 4),
+          " days"
+        )
+      )
+      print(
+        paste0(
+          "Total number of mutations: ",
+          length(unlist(mcmc$tmu))
+        )
+      )
+      print(
+        paste0(
+          "Number of included hosts: ",
+          length(unlist(mcmc$seq))
+        )
+      )
+      if(!data$rooted){
+        print(
+          paste0(
+            "Epidemic start date: ",
+            data$s_max + mcmc$seq[[1]]
+          )
+        )
+      }
     }
 
     if(logging){

@@ -148,6 +148,10 @@ g_lik <- function(mcmc, data, i, js = NULL){
   isnv_pos <- data$snvs[[i]]$isnv$pos
   isnv_a2 <- data$snvs[[i]]$isnv$a2
 
+  # Proportion of the population that is a de novo iSNV
+  freq <- data$snvs[[i]]$isnv$af1
+  freq[mcmc$bot[[i]]] <- 1 - freq[mcmc$bot[[i]]]
+
   # If using split bottleneck feature: which of these bottlenecks are split?
   if(data$split_bottlenecks & i != 1){
     h <- mcmc$h[i]
@@ -209,6 +213,7 @@ g_lik <- function(mcmc, data, i, js = NULL){
             isnv_a1 <- isnv_a1[keep]
             isnv_pos <- isnv_pos[keep]
             isnv_a2 <- isnv_a2[keep]
+            freq <- freq[keep]
 
             # As an approximation, penalize by cost of additional branch from h to i with uninvolved mutations (integrating out their time)
             delta_t <- mcmc$seq[[i]][1] - mcmc$seq[[h]][1]
@@ -225,9 +230,7 @@ g_lik <- function(mcmc, data, i, js = NULL){
   }
 
 
-  # Proportion of the population that is a de novo iSNV
-  freq <- data$snvs[[i]]$isnv$af1
-  freq[mcmc$bot[[i]]] <- 1 - freq[mcmc$bot[[i]]]
+
 
   # Children of i
   if(is.null(js)){

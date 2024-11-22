@@ -178,7 +178,12 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
     frac_emerge <- pmin(frac_emerge, 1/2)
 
     # Undetected SNVs in iSNV data
-    undetected <- setdiff(1:n_mut, detected)
+    if(n_mut == 0){
+      undetected <- integer(0)
+    }else{
+      undetected <- setdiff(1:n_mut, detected)
+    }
+
   }
 
   if(n_mut != length(mcmc$tmu[[i]]) | max_t <= min_t){
@@ -217,11 +222,11 @@ resample_tmu <- function(mcmc, data, i, output = "all"){
   }
 
 
-    return(list(
-      mcmc,
-      log_p_new_old,
-      log_p_old_new
-    ))
+  return(list(
+    mcmc,
+    log_p_new_old,
+    log_p_old_new
+  ))
 
 
 }
@@ -505,8 +510,3 @@ p_pick_h <- function(mcmc, data){
   return(ds)
 
 }
-
-
-
-
-

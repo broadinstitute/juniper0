@@ -351,9 +351,3 @@ amalgamate <- function(all_res, mcmcs, datas, mcmc, data){
 
   }
 }
-
-
-
-
-
-

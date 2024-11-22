@@ -1097,8 +1097,3 @@ obj_ext <- function(x, rho, psi){
 p_ext <- function(rho, psi){
   optim(1e-5, obj_ext, method = "Brent", rho=rho, psi=psi, lower = 0, upper = 1)$par
 }
-
-
-
-
-
