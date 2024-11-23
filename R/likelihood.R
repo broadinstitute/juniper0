@@ -94,6 +94,13 @@ e_lik_personal <- function(mcmc, data, i, js = NULL){
   # 1st param in NBin offspring distribution
   rho <- mcmc$R * mcmc$psi / (1 - mcmc$psi)
 
+  if(!data$ongoing){
+    out <- probTTree(
+      ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, Inf, wbar0 = 0, delta_t = 0.1
+    )
+    return(out)
+  }
+
   # Min time of infection
   tinfmin <- min(ttree[,1])
   # Length of wbar
@@ -288,7 +295,7 @@ g_lik <- function(mcmc, data, i, js = NULL){
             }
 
             # Each outgoing branch from i has 1/2 probability of choosing correct ancestral virion
-            out <- out + length(js)*log(1/2)
+            #out <- out + length(js)*log(1/2)
 
             # Delete iSNVs on the global phylogeny that are accounted for in split bottleneck
             keep <- setdiff(1:length(trans_isnv_pos), delete)

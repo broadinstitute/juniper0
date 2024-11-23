@@ -23,6 +23,7 @@
 #' @param fixed_R If FALSE (the default), the reproductive number is estimated. If TRUE, the reproductive number is fixed at its initial value for the duration of the algorithm.
 #' @param init_pi Initial value of the sampling rate. Defaults to 0.5.
 #' @param fixed_pi If FALSE (the default), the sampling rate is estimated. If TRUE, the sampling rate is fixed at its initial value for the duration of the algorithm.
+#' @param ongoing TRUE if the outbreak is ongoing, or FALSE if has it concluded (i.e. no more samples will ever be collected from this outbreak). Defaults to TRUE.
 #' @param safety Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.
 #' @param split_bottlenecks If TRUE, likelihood accounts for split bottlenecks (new beta feature). Defaults to FALSE.
 #' @return The initial configuration of the Markov Chain.
@@ -50,6 +51,7 @@ initialize <- function(
     fixed_R = FALSE,
     init_pi = 0.5,
     fixed_pi = FALSE,
+    ongoing = TRUE,
     safety = NA,
     split_bottlenecks = FALSE
 ){
@@ -256,6 +258,7 @@ initialize <- function(
   data$fixed_R <- fixed_R
   data$init_pi <- init_pi
   data$fixed_pi <- fixed_pi
+  data$ongoing <- ongoing
   data$names <- names
   data$s_max <- s_max
   data$safety <- safety
@@ -528,8 +531,12 @@ initialize <- function(
     data$t_min <- (min(data$s, na.rm = T) - 10) * 10 # Set minimum time of anything happening to 10 times earlier than 10 less than the min sampling time
   }
 
-  # Can consider updating this by forcing it to converge?
-  mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
+  if(data$ongoing){
+    # Can consider updating this by forcing it to converge?
+    mcmc$wbar <- wbar(data$t_min, 0, mcmc$R * mcmc$psi / (1 - mcmc$psi), 1 - mcmc$psi, mcmc$pi, mcmc$a_g, 1 / mcmc$lambda_g, mcmc$a_s, 1 / mcmc$lambda_s, 0.1)
+  }else{
+    mcmc$wbar <- 0 # Placeholder
+  }
 
   # Also track the epidemiological and genomic likelihoods, and prior
   # The genomic likelihood we will store on a per-person basis, for efficiency purposes

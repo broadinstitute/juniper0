@@ -20,9 +20,14 @@ initialize(
   lambda_s = 1,
   psi = 0.5,
   init_mu = 2e-05,
-  fixed_mu = F,
-  N_eff = log(100),
+  fixed_mu = FALSE,
+  init_N_eff = log(100),
   fixed_N_eff = FALSE,
+  init_R = 1,
+  fixed_R = FALSE,
+  init_pi = 0.5,
+  fixed_pi = FALSE,
+  ongoing = TRUE,
   safety = NA,
   split_bottlenecks = FALSE
 )
@@ -58,9 +63,19 @@ initialize(
 
 \item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at its initial value for the duration of the algorithm.}
 
-\item{N_eff}{The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).}
+\item{init_N_eff}{The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).}
 
 \item{fixed_N_eff}{If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.}
+
+\item{init_R}{Initial value of the reproductive number. Defaults to 1.}
+
+\item{fixed_R}{If FALSE (the default), the reproductive number is estimated. If TRUE, the reproductive number is fixed at its initial value for the duration of the algorithm.}
+
+\item{init_pi}{Initial value of the sampling rate. Defaults to 0.5.}
+
+\item{fixed_pi}{If FALSE (the default), the sampling rate is estimated. If TRUE, the sampling rate is fixed at its initial value for the duration of the algorithm.}
+
+\item{ongoing}{TRUE if the outbreak is ongoing, or FALSE if has it concluded (i.e. no more samples will ever be collected from this outbreak). Defaults to TRUE.}
 
 \item{safety}{Either NA or a non-negative value. If NA, safety mode (checking that the likelihood is correct after each global iteration) is disabled. If numeric, the maximum tolerance for a difference in the re-computed versus stored likelihood before throwing an error. Defaults to NA.}
 

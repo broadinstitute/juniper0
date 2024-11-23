@@ -191,6 +191,7 @@ breakdown <- function(mcmc, data, old_roots){
     datas[[i]]$fixed_R <- data$fixed_R
     datas[[i]]$init_pi <- data$init_pi
     datas[[i]]$fixed_pi <- data$fixed_pi
+    datas[[i]]$ongoing <- data$ongoing
 
     # No need to store names
 

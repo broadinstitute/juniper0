@@ -212,7 +212,10 @@ move_pi <- function(mcmc, data){
     return(mcmc)
   }else{
 
-    prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+    if(data$ongoing){
+      prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+    }
+
 
 
     update_e <- 1:mcmc$n
@@ -277,7 +280,9 @@ move_R <- function(mcmc, data){
     return(mcmc)
   }
 
-  prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+  if(data$ongoing){
+    prop$wbar <- wbar(data$t_min, 0, prop$R * prop$psi / (1 - prop$psi), 1 - prop$psi, prop$pi, prop$a_g, 1 / prop$lambda_g, prop$a_s, 1 / prop$lambda_s, 0.1)
+  }
 
 
   update_e <- 1:mcmc$n

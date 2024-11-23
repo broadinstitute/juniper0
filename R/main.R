@@ -204,6 +204,7 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
           )
         )
       }
+      print(mcmc$h)
     }
 
     if(logging){
