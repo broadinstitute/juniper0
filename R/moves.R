@@ -560,12 +560,13 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   # "Score" the choices: shared iSNV = +1
   if(biassed){
-    scores <- softmax(sapply(choices, score, mcmc=mcmc, i=i), data$tau)
+    lscores <- lsoftmax(sapply(choices, score, mcmc=mcmc, i=i), data$tau)
+
   }else{
-    scores <- rep(1/length(choices), length(choices))
+    lscores <- rep(-log(length(choices)), length(choices))
   }
 
-  h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = scores))
+  h_new <- ifelse(length(choices) == 1, choices, sample(choices, 1, prob = exp(lscores)))
 
   # Find the path from h_old to h_new
   route <- paths(mcmc$h, h_old, h_new)
@@ -600,12 +601,12 @@ move_h_global <- function(mcmc, data, biassed = T){
 
   # Scores for proposing the move in the opposite direction
   if(biassed){
-    rev_scores <- softmax(sapply(choices, score, mcmc=prop, i=i), data$tau)
+    rev_lscores <- lsoftmax(sapply(choices, score, mcmc=prop, i=i), data$tau)
   }else{
-    rev_scores <- rep(1/length(choices), length(choices))
+    rev_lscores <- rep(-log(length(choices)), length(choices))
   }
 
-  hastings <- hastings + log(rev_scores[which(choices == h_old)]) - log(scores[which(choices == h_new)])
+  hastings <- hastings + rev_lscores[which(choices == h_old)] - lscores[which(choices == h_new)]
 
   update <- c(h_old, h_new, i)
 

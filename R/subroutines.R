@@ -585,9 +585,14 @@ ddelta <- function(delta, mu_delta, max_delta, log){
 
 
 
-## Softmax function, used for choosing arbitrary new ancestors
-softmax <- function(v, tau){
-  exp(v/tau) / sum(exp(v/tau))
+## Log softmax function, used for choosing arbitrary new ancestors
+lsoftmax <- function(v, tau){
+  biggest <- max(v/tau)
+  # Denominator
+  denom <- biggest + log(sum(exp(v/tau - biggest)))
+  return(v/tau - denom)
+
+  #exp(v/tau) / sum(exp(v/tau))
 }
 
 ## Score function: approximates the utility of attaching i to j in terms of parsimony
