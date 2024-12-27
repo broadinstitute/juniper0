@@ -1096,6 +1096,12 @@ move_delete <- function(mcmc, data, upstream = T, biassed = F){
 
   # Who to delete
   choices <- setdiff((data$n_obs + 1):(mcmc$n), mcmc$external_roots)
+
+  # Auto-reject if no valid choices
+  if(length(choices) == 0){
+    return(mcmc)
+  }
+
   if(biassed){
     ds <- sapply(choices, function(x){length(which(mcmc$h == x))})
     choices <- choices[which(ds == 2)]
