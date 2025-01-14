@@ -387,9 +387,14 @@ g_lik <- function(mcmc, data, i, js = NULL){
 
   # For iSNVs UNobserved in i that ARE accounted for on the global phylogeny, again condition on when the first denovo SNV occurs
   #print(global_alone)
+
+  # pbeta can cause errors when parameters too big
+  trans_isnv_size_stable <- trans_isnv_size[global_alone]
+  trans_isnv_size_stable[trans_isnv_size_stable > 1e100] <- Inf
+
   out <- out + sum(log(
     pprop_bounded(data$filters$af, trans_isnv_size[global_alone], mcmc$mu / mcmc$N_eff, log = F) + # When there's an earlier emergence of this iSNV
-      pbeta(data$filters$af, 1, trans_isnv_size[global_alone]) * pgeom(trans_isnv_size[global_alone] - 1, mcmc$mu / mcmc$N_eff, lower.tail = F) # When there's not
+      pbeta(data$filters$af, 1, trans_isnv_size_stable) * pgeom(trans_isnv_size[global_alone] - 1, mcmc$mu / mcmc$N_eff, lower.tail = F) # When there's not
   ))
 
   # And finally, all other sites
