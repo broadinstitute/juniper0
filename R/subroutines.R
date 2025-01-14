@@ -127,8 +127,9 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
       nonzero <- which(props > 0)
 
       if(length(nonzero) < 2){
-        print(i)
+        #print(i)
         print(vcf)
+        print(p)
         stop("???")
       }
 

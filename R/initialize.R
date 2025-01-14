@@ -56,6 +56,10 @@ initialize <- function(
     split_bottlenecks = FALSE
 ){
 
+  if(!rooted & init_pi == 1 & !ongoing){
+    stop("If treating all cases as sampled, root must be provided.")
+  }
+
   ## Filters
   if(is.null(filters)){
     filters <- list(
@@ -168,6 +172,7 @@ initialize <- function(
     # Locate the correct vcf file
     who <- which(vcfs_prefix == names[i])
     if(length(who) == 1){
+      #print(paste0("./", indir, "/vcf/", vcfs[who]))
       # First see if there are any lines to read
       test <- readLines(
         paste0("./", indir, "/vcf/", vcfs[who])
@@ -201,6 +206,7 @@ initialize <- function(
       vcf_present[i] <- FALSE
     }
     setTxtProgressBar(pb,i)
+
   }
 
   close(pb)
@@ -464,7 +470,10 @@ initialize <- function(
   for (i in ord) {
 
     if(i != 1){
-      mcmc$seq[[i]] <- get_ts(mcmc, data, i)
+      # Only infer unsampled hosts along edge when pi < 1, or when outbreak is ongoing
+      if(mcmc$pi < 1 | data$ongoing){
+        mcmc$seq[[i]] <- get_ts(mcmc, data, i)
+      }
     }
 
     if(!identical(get_dropout(mcmc, data, i), mcmc$dropout[[i]])){

@@ -96,7 +96,7 @@ e_lik_personal <- function(mcmc, data, i, js = NULL){
 
   if(!data$ongoing){
     out <- probTTree(
-      ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, Inf, wbar0 = 0, delta_t = 0.1
+      ttree, rho, 1-mcmc$psi, mcmc$pi, mcmc$a_g, 1/mcmc$lambda_g, mcmc$a_s, 1/mcmc$lambda_s, Inf, wbar0 = 0, delta_t = 0.1 # wbar0 argument doesn't matter here; unused
     )
     return(out)
   }
