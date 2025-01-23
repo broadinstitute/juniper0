@@ -16,11 +16,13 @@ summarize <- function(results, burnin = 0.2){
   direct <- matrix(0, ncol = n_obs, nrow = n_obs)
   burnin <- n_reps * burnin + 1
 
-  # Generations per transmission
   mus <- c()
   N_effs <- c()
   pis <- c()
   Rs <- c()
+
+  # Time of infection for each observed host
+  ts <- matrix(ncol = n_obs - 1, nrow = 0)
 
   if(!rooted){
     tmrca <- c()
@@ -34,6 +36,8 @@ summarize <- function(results, burnin = 0.2){
     h <- results[[2]][[i]]$h
     n <- results[[2]][[i]]$n
     w <- sapply(results[[2]][[i]]$seq, length) - 1
+
+    ts <- rbind(ts, sapply(results[[2]][[i]]$seq[2:n_obs], function(v){v[1]}))
 
     if(!rooted){
       tmrca <- c(tmrca, (results[[2]][[i]]$seq[[1]])[1])
@@ -71,7 +75,16 @@ summarize <- function(results, burnin = 0.2){
     indirect <- indirect[2:n_obs, 2:n_obs]
   }
 
-  # If unrooted, return samples of time of MRCA
+  # Process times of infection
+  mean_ts <- colMeans(ts) + s_max
+  lower_ts <- apply(ts, 2, function(v){quantile(v, 0.025)}) + s_max
+  upper_ts <- apply(ts, 2, function(v){quantile(v, 0.975)}) + s_max
+
+  names(mean_ts) <- names[2:n_obs]
+  names(lower_ts) <- names[2:n_obs]
+  names(upper_ts) <- names[2:n_obs]
+
+
 
   out <- list(
     log_likelihood = results[[1]],
@@ -80,7 +93,10 @@ summarize <- function(results, burnin = 0.2){
     mu = mus,
     N_effs = N_effs,
     pi = pis,
-    R = Rs
+    R = Rs,
+    mean_t_inf = mean_ts,
+    lower_95_hpd_t_inf = lower_ts,
+    upper_95_hpd_t_inf = upper_ts
   )
 
   # Visualization
@@ -90,6 +106,7 @@ summarize <- function(results, burnin = 0.2){
   hist(out$pi, xlab = "Value", main = "Sampling Rate")
   hist(out$R, xlab = "Value", main = "Reproductive Number")
 
+  # If unrooted, return samples of time of MRCA
   if(!rooted){
     tmrca <- s_max + tmrca
     hist(tmrca, xlab = "Date", main = "Epidemic Start Date", breaks = "days")
