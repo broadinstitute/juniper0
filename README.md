@@ -1,9 +1,3 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 # JUNIPER
 
 Specht et al. 2025
@@ -62,10 +56,6 @@ named `myname`:
 setwd("/Users/myname/Desktop/projects/")
 mkdir("/Users/myname/Desktop/projects/input_data")
 ```
-
-See [Running with custom parameters] for more details on file paths. If
-you do not have an aligned FASTA in this format, see [Other
-considerations] for help creating this file.
 
 ### VCF files
 
