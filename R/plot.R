@@ -77,7 +77,10 @@ plot_network <- function(init, type = "standard"){
 
     colors <- rep('black', length(who))
     colors[who > data$n_obs] <- 'gray'
-    colors[1] <- 'red'
+
+    if(!data$rooted){
+      colors[1] <- 'gray'
+    }
 
     t <- data$s_max + t
     xs <- data$s_max + xs
@@ -90,7 +93,7 @@ plot_network <- function(init, type = "standard"){
       ggplot2::geom_point(mapping = ggplot2::aes(x = df_standard$x, y = df_standard$y, color = colors), size = 1) +
       ggplot2::xlab("Date") +
       ggplot2::scale_y_continuous(breaks = NULL) +
-      ggplot2::scale_color_manual(values = c("black", "gray", "red")) +
+      ggplot2::scale_color_manual(values = c("black", "gray")) +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         axis.title.y = ggplot2::element_blank(),

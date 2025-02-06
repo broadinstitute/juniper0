@@ -22,6 +22,10 @@
 
 ### Helper functions
 
+is_date <- function(x) {
+  !is.na(tryCatch(as.Date(x), error = function(e) NA))
+}
+
 # Functions to convert between raw format and nucleotide letters:
 base_to_raw <- function(b){
   out <- rep(as.raw(04), length(b))
@@ -41,7 +45,7 @@ raw_to_base <- function(r){
   return(out)
 }
 
-genetic_info <- function(seq1, seq2, filters, vcf = NULL){
+genetic_info <- function(seq_name, seq1, seq2, filters, vcf = NULL){
   # List output: list of SNVs, iSNVs, and positions with no information
   out <- list()
 
@@ -120,6 +124,32 @@ genetic_info <- function(seq1, seq2, filters, vcf = NULL){
       afs <- af[rows]
       alts <- alt[rows]
       refs <- ref[rows]
+
+      # Sometimes, we see a repeated row
+      dup <- duplicated(alts)
+
+      if(any(dup)){
+
+        message(paste0(
+          "In the VCF file for sequence ",
+          seq_name,
+          " multiple entries were found for the following iSNVs: ",
+          paste(paste0(refs[dup], p, alts[dup]), collapse = ", "),
+          ". Duplicated iSNV calls will be masked."
+        ))
+
+        rows <- rows[!dup]
+        afs <- afs[!dup]
+        alts <- alts[!dup]
+        refs <- refs[!dup]
+
+
+
+      }
+
+
+
+
       props[match(alts, c("A", "C", "G", "T"))] <- afs
       props[match(refs[1], c("A", "C", "G", "T"))] <- 1 - sum(afs)
 

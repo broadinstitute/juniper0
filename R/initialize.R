@@ -77,10 +77,153 @@ initialize <- function(
 
   ### Data Processing
 
-  ## FASTAs and dates
+  # Read in metadata file
+  meta_names <- list.files(paste0("./", indir), pattern = "metadata")
 
-  # Load the FASTA of sequences
-  fasta <- ape::read.FASTA(paste0("./", indir, "/aligned.fasta"))
+  if(length(meta_names) == 0){
+    stop("No metadata file found.")
+  }
+
+  if(length(meta_names) > 1){
+    stop(paste0("Multiple possible metadata files found: ", paste(meta_names, collapse = ", "), "."))
+  }
+
+  # Get the suffix of metadata file
+  meta_extension <- sub(".*\\.", "", meta_names)
+
+  if(meta_extension == "tsv"){
+    meta <- read.csv(paste0("./", indir, "/", meta_names), sep = "\t")
+  }else if(meta_extension == "csv"){
+    meta <- read.csv(paste0("./", indir, "/", meta_names))
+  }else{
+    stop("Metadata file must be in .tsv or .csv format.")
+  }
+
+  # Check metadata file has appropriate columns
+  if(!("sample" %in% colnames(meta))){
+    stop("Metadata file must contain a column named 'sample' with the names of the sequences.")
+  }
+  if(!("date" %in% colnames(meta))){
+    stop("Metadata file must contain a column named 'date' with the sequence collection dates.")
+  }
+
+  if(!all(is_date(meta$date))){
+    stop("The 'date' column in the metadata file is not in a standard date format.")
+  }
+
+  meta$date <- as.Date(meta$date)
+
+
+
+
+  ## If user hasn't provided single aligned.fasta file, and has instead provided individual fastas...
+  if(!file.exists(paste0("./", indir, "/aligned.fasta"))){
+    fasta_names <- list.files(paste0("./", indir), pattern = ".fasta")
+    all_fasta_names <- fasta_names
+
+    # Keep only the fastas that are found in the metadata list
+    keep <- integer(0)
+    for (i in 1:nrow(meta)) {
+      # Line of metadata table that matches the fasta name
+      ind <- which(grepl(meta$sample[i], fasta_names))
+
+      if(length(ind) == 0){
+        stop(paste0("No FASTA file for sequence name ", meta$sample[i], "."))
+      }
+
+      if(length(ind) > 1){
+        stop(paste0("Multiple FASTA files for sequence name ", meta$sample[i], ": ", paste(fasta_names[ind], collapse = " "), "."))
+      }
+
+      keep <- c(keep, ind)
+    }
+
+    # Subset to fasta files kept
+    removed <- setdiff(1:length(fasta_names), keep)
+    if(length(removed) > 0){
+      message(paste0(
+        "The following FASTA files could not be matched to the metadata tables, and will not be included in the analysis: ",
+        paste(fasta_names[removed], collapse = ", ")
+      ))
+    }
+
+
+    fasta_names <- fasta_names[keep]
+
+    if(length(fasta_names) == 0){
+      stop("No FASTA files that match the metadata table sequence names were found.")
+    }
+
+    # Read in each fasta
+    fasta <- ape::read.FASTA(paste0("./", indir, "/", fasta_names[1]))
+    if(length(fasta_names) > 1){
+      for (i in 2:length(fasta_names)) {
+        fasta <- c(fasta, ape::read.FASTA(paste0("./", indir, "/", fasta_names[i])))
+      }
+    }
+
+    # Get length of each fasta
+    lengths <- sapply(fasta, length)
+
+    if(!all(lengths == lengths[1])){
+      stop("FASTA files are not aligned.")
+    }
+
+    names(fasta) <- paste0(meta$sample, "|", meta$date)
+
+    # Bookkeeping: move all fastas to separate folder
+    if(!dir.exists(paste0("./", indir, "/fasta"))){
+      dir.create(paste0("./", indir, "/fasta"))
+    }
+
+    for (i in 1:length(all_fasta_names)) {
+      file.rename(paste0("./", indir, "/", fasta_names[i]), paste0("./", indir, "/fasta/", fasta_names[i]))
+    }
+
+    # Write aligned fasta
+    ape::write.FASTA(fasta, file = paste0("./", indir, "/aligned.fasta"))
+
+  }else{
+    fasta <- ape::read.FASTA(paste0("./", indir, "/aligned.fasta"))
+
+    # Keep only the fastas that are found in the metadata list
+    keep <- integer(0)
+    for (i in 1:nrow(meta)) {
+      # Line of metadata table that matches the fasta name
+      ind <- which(grepl(meta$sample[i], names(fasta)))
+
+      if(length(ind) == 0){
+        stop(paste0("No sequence in aligned.fasta found for sequence name ", meta$sample[i], "."))
+      }
+
+      if(length(ind) > 1){
+        stop(paste0("Multiple sequences in aligned.fasta found for sequence name ", meta$sample[i], ": ", paste(names(fasta)[ind], collapse = " "), "."))
+      }
+
+      keep <- c(keep, ind)
+    }
+
+    # Subset to fasta files kept
+    removed <- setdiff(1:length(fasta), keep)
+    if(length(removed) > 0){
+      message(paste0(
+        "The following FASTA files could not be matched to the metadata tables, and will not be included in the analysis: ",
+        paste(names(fasta)[removed], collapse = ", ")
+      ))
+    }
+
+
+    fasta <- fasta[keep]
+
+    if(length(fasta) == 0){
+      stop("No FASTA files that match the metadata table sequence names were found.")
+    }
+
+    names(fasta) <- paste0(meta$sample, "|", meta$date)
+
+  }
+
+  ## FASTAs and dates
 
   # Times of collection for the non-reference sequence
   s_nonref <- as.Date(gsub(".*\\|", "", names(fasta)))
@@ -94,7 +237,7 @@ initialize <- function(
       ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
       s_ref <- as.Date(gsub(".*\\|", "", names(ref_genome)))
     }else{
-      stop("A ref.fasta file must be provided in the input_data directory when rooted = TRUE")
+      stop("A ref.fasta file must be provided in the input_data directory when rooted = TRUE.")
     }
 
     # if(any(
@@ -166,19 +309,22 @@ initialize <- function(
   snvs <- list()
   pb = txtProgressBar(min = 0, max = n, initial = 0)
 
-  vcfs_prefix <- gsub(".vcf", "", vcfs)
   vcf_present <- c()
   for (i in 1:n) {
     # Locate the correct vcf file
-    who <- which(vcfs_prefix == names[i])
+    who <- which(grepl(names[i], vcfs))
+    if(length(who) > 1){
+      stop(paste0("Multiple VCF files found for sequence ", names[i], ": ", paste(vcfs[who], collapse =  ", "), "."))
+    }
     if(length(who) == 1){
       #print(paste0("./", indir, "/vcf/", vcfs[who]))
       # First see if there are any lines to read
       test <- readLines(
         paste0("./", indir, "/vcf/", vcfs[who])
       )
-      test <- substring(test, 1, 1)
-      if(all(test == "#")){
+      first_char <- substring(test, 1, 1)
+      if(all(first_char == "#")){
+        # We use the 8-column LoFreq VCF format, and provide an empty file
         vcf <- data.frame(
           V1 = character(0),
           V2 = integer(0),
@@ -190,19 +336,86 @@ initialize <- function(
           V8 = character(0)
         )
       }else{
-        vcf <- read.delim(
-          paste0("./", indir, "/vcf/", vcfs[who]),
-          colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character"),
-          comment.char = "#",
-          header = F
-        )
-        colnames(vcf) <- paste0("V", 1:ncol(vcf))
+        # Figure out whether we're using LoFreq VCF or standard format
+        col_names_index <- 1
+        while (first_char[col_names_index] == "#") {
+          col_names_index <- col_names_index + 1
+        }
+        col_names_index <- col_names_index - 1 # Col names row starts with #CHROM
+
+        col_names <- test[col_names_index]
+        col_names <- unlist(strsplit(col_names, "\t"))
+
+        if(identical(
+          col_names,
+          c("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO")
+        )){
+          #message("Reading VCF files in LoFreq format...")
+
+          vcf <- read.delim(
+            paste0("./", indir, "/vcf/", vcfs[who]),
+            colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character"),
+            comment.char = "#",
+            header = F
+          )
+          colnames(vcf) <- paste0("V", 1:ncol(vcf))
+
+        }else if(identical(
+          col_names,
+          c("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "SAMPLE")
+
+        )){
+          #message("Reading VCF files in standard format...")
+
+          vcf <- read.delim(
+            paste0("./", indir, "/vcf/", vcfs[who]),
+            colClasses = c("character", "integer", "character", "character", "character", "character", "character", "character", "character", "character"),
+            comment.char = "#",
+            header = F
+          )
+
+          # Assemble info column per LoFreq format
+          af <- rep("0", nrow(vcf))
+          sb <- rep("0", nrow(vcf))
+          dp <- rep("0", nrow(vcf))
+
+          for (j in 1:nrow(vcf)) {
+            metrics <- strsplit(vcf$V9[j], "\\:")[[1]]
+            measurements <- strsplit(vcf$V10[j], "\\:")[[1]]
+
+            for (k in 1:length(metrics)) {
+              if(metrics[k] == "AF"){
+                af[j] <- measurements[k]
+              }
+              if(metrics[k] == "SB"){
+                sb[j] <- measurements[k]
+              }
+              if(metrics[k] == "DP"){
+                dp[j] <- measurements[k]
+              }
+            }
+          }
+
+          vcf$V8 = paste0("DP=", dp, ";AF=", af, ";SB=", sb)
+          vcf <- vcf[, 1:8, drop = F]
+          colnames(vcf) <- paste0("V", 1:ncol(vcf))
+
+
+
+        }else{
+          stop("VCF files are in an unknown format. The supported formats are standard VCF or LoFreq VCF. A standard VCF has column names #CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO, FORMAT, and SAMPLE. A LoFreq VCF has the same column names, except without FORMAT and SAMPLE. Please check VCF files and try again.")
+
+        }
+
+
       }
 
-      snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+      snvs[[i]] <- genetic_info(names[i], ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+
+      # Even if the VCF has no lines, it's present, i.e. we observed no iSNVs
       vcf_present[i] <- TRUE
     }else{
-      snvs[[i]] <- genetic_info(ref_genome[[1]], fasta[[i]], filters = filters)
+      snvs[[i]] <- genetic_info(names[i], ref_genome[[1]], fasta[[i]], filters = filters)
       vcf_present[i] <- FALSE
     }
     setTxtProgressBar(pb,i)
