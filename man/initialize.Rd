@@ -9,7 +9,7 @@ initialize(
   n_global = 100,
   n_local = 100,
   sample_every = 100,
-  rooted = FALSE,
+  root = NA,
   N = NA,
   record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"),
   filters = NULL,
@@ -41,13 +41,13 @@ initialize(
 
 \item{sample_every}{Number of local iterations per one sample. Must divide n_local.}
 
-\item{rooted}{If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.}
+\item{root}{If not NA, the sequence name given is treated as the root of the transmission network. Defaults to NA}
 
 \item{record}{Parameters to be recorded in the MCMC output.}
 
 \item{filters}{Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.}
 
-\item{indir}{Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs. Defaults to "input_data".}
+\item{indir}{Name of the directory in which we have fasta(s), metadata table, and (optionally) vcf files. Defaults to "input_data."}
 
 \item{a_g}{Shape parameter, generation interval. Defaults to 5.}
 

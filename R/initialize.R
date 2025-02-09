@@ -6,10 +6,10 @@
 #' @param n_global Number of global iterations. Defaults to 100.
 #' @param n_local Number of local iterations per global iteration. Defaults to 100.
 #' @param sample_every Number of local iterations per one sample. Must divide n_local.
-#' @param rooted If TRUE, the sequence ref.fasta is treated as the root of the transmission network. If FALSE, no root is prespecified. In the latter case, it is recommended to specify a fixed mutation rate value via fixed_mu to ensure convergence.
+#' @param root If not NA, the sequence name given is treated as the root of the transmission network. Defaults to NA
 #' @param record Parameters to be recorded in the MCMC output.
 #' @param filters Filters for within-host variation data. List consisting of three named values: af, dp, and sb, meaning minor allele frequency threshhold, read depth threshhold, and strand bias threshhold, respectively. Defaults to NULL, in which case these filters are set to 0.03, 100, and 10, respectively.
-#' @param indir Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs. Defaults to "input_data".
+#' @param indir Name of the directory in which we have fasta(s), metadata table, and (optionally) vcf files. Defaults to "input_data."
 #' @param a_g Shape parameter, generation interval. Defaults to 5.
 #' @param lambda_g Rate parameter, generation interval. Defaults to 1.
 #' @param a_s Shape parameter, sojourn interval. Defaults to 5.
@@ -33,11 +33,11 @@ initialize <- function(
     n_global = 100, # Number of global moves
     n_local = 100, # Number of local moves per global move
     sample_every = 100, # Per how many local moves do we draw one sample? Should be a divisor of n_local
-    rooted = FALSE, # Is the root of the transmission network fixed at the ref sequence?
+    root = NA, # Is the root of the transmission network fixed at the specified sequence?
     N = NA, # Population size
     record = c("n", "h", "seq", "N_eff", "mu", "pi", "R"), # Which aspects of mcmc do we want to record
     filters = NULL,
-    indir = "input_data", # Name of the directory in which we have aligned.fasta, ref.fasta, date.csv, vcf folder, and other optional inputs
+    indir = "input_data", # Name of the directory in which we have fasta(s), metadata table, and (optionally) vcf files.
     a_g = 5, # Shape parameter, generation interval
     lambda_g = 1, # Rate parameter, generation interval
     a_s = 5, # Shape parameter, sojourn interval
@@ -55,6 +55,9 @@ initialize <- function(
     safety = NA,
     split_bottlenecks = FALSE
 ){
+
+  # Does the cluster have a prespecified root?
+  rooted <- !is.na(root)
 
   if(!rooted & init_pi == 1 & !ongoing){
     stop("If treating all cases as sampled, root must be provided.")
@@ -111,6 +114,16 @@ initialize <- function(
     stop("The 'date' column in the metadata file is not in a standard date format.")
   }
 
+  if(any(duplicated(meta$sample))){
+    stop(paste0("The following sequence names are duplicated in the metadata table: ", paste(meta$sample[duplicated(meta$sample)], collapse = ", "), "."))
+  }
+
+  if(rooted){
+    if(!(root %in% meta$sample)){
+      stop("The specified root does not match any of the sequence names in the metadata table.")
+    }
+  }
+
   meta$date <- as.Date(meta$date)
 
 
@@ -142,7 +155,7 @@ initialize <- function(
     removed <- setdiff(1:length(fasta_names), keep)
     if(length(removed) > 0){
       message(paste0(
-        "The following FASTA files could not be matched to the metadata tables, and will not be included in the analysis: ",
+        "The following FASTA files could not be matched to the sequence names in the metadata table, and will not be included in the analysis: ",
         paste(fasta_names[removed], collapse = ", ")
       ))
     }
@@ -207,7 +220,7 @@ initialize <- function(
     removed <- setdiff(1:length(fasta), keep)
     if(length(removed) > 0){
       message(paste0(
-        "The following FASTA files could not be matched to the metadata tables, and will not be included in the analysis: ",
+        "The following entries of the FASTA could not be matched to the sequence names in the metadata table, and will not be included in the analysis: ",
         paste(names(fasta)[removed], collapse = ", ")
       ))
     }
@@ -216,7 +229,7 @@ initialize <- function(
     fasta <- fasta[keep]
 
     if(length(fasta) == 0){
-      stop("No FASTA files that match the metadata table sequence names were found.")
+      stop("No sequences names in the FASTA match the sequence names in the metadata table.")
     }
 
     names(fasta) <- paste0(meta$sample, "|", meta$date)
@@ -225,53 +238,46 @@ initialize <- function(
 
   ## FASTAs and dates
 
-  # Times of collection for the non-reference sequence
-  s_nonref <- as.Date(gsub(".*\\|", "", names(fasta)))
+  # If cluster is rooted, remove root from fasta
+  if(rooted){
+    root_ind <- which(meta$sample == root)
+    root_genome <- fasta[root_ind]
+    fasta <- fasta[-root_ind]
+    s_root <- as.Date(gsub(".*\\|", "", names(root_genome)))
+  }
 
-  # If rooted, reference sequence is provided. Otherwise, initialized to earliest case in dataset.
+  # Times of collection for the non-root sequence
+  s_nonroot <- as.Date(gsub(".*\\|", "", names(fasta)))
+
+  # If rooted, root sequence is provided. Otherwise, initialized to earliest case in dataset.
   # In the latter case, the genome will be updated regardless, so this initialization doesn't matter
 
-  if(rooted){
-    # Load the reference sequence
-    if(file.exists(paste0("./", indir, "/ref.fasta"))){
-      ref_genome <- ape::read.FASTA(paste0("./", indir, "/ref.fasta"))
-      s_ref <- as.Date(gsub(".*\\|", "", names(ref_genome)))
-    }else{
-      stop("A ref.fasta file must be provided in the input_data directory when rooted = TRUE.")
-    }
-
-    # if(any(
-    #   !(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))
-    # )){
-    #   stop("ref.fasta cannot have any missing positions")
-    # }
-
-  }else{
-    earliest <- which.min(s_nonref)
-    ref_genome <- fasta[earliest]
-    names(ref_genome) <- "ref_genome"
+  if(!rooted){
+    earliest <- which.min(s_nonroot)
+    root_genome <- fasta[earliest]
+    names(root_genome) <- "ref_genome"
 
     # Going to initialize time of collection to 1 generation interval and 1 sojourn interval before earliest sequence collection
-    s_ref <- min(s_nonref) - (a_g / lambda_g) - (a_s / lambda_s)
+    s_root <- min(s_nonroot) - (a_g / lambda_g) - (a_s / lambda_s)
   }
 
-  # Fill the ref_genome's missing sites with "A". This is simply a placeholder, since genotype() will update all of them
-  ref_missing <- which(!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24))))
-  ref_genome[[1]][!(ref_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))] <- base_to_raw("A")
+  # Fill the root_genome's missing sites with "A". This is simply a placeholder, since genotype() will update all of them
+  root_missing <- which(!(root_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24))))
+  root_genome[[1]][!(root_genome[[1]] %in% c(as.raw(136), as.raw(40), as.raw(72), as.raw(24)))] <- base_to_raw("A")
 
   # Length of genome
-  n_bases <- length(ref_genome[[1]])
+  n_bases <- length(root_genome[[1]])
 
-  # The first genome is itself the ref genome
-  fasta <- c(ref_genome, fasta)
+  # The first genome is itself the root genome
+  fasta <- c(root_genome, fasta)
   if(rooted){
-    s <- c(s_ref, s_nonref)
+    s <- c(s_root, s_nonroot)
   }else{
-    s <- c(as.Date(NA), s_nonref)
+    s <- c(as.Date(NA), s_nonroot)
   }
 
 
-  # The earliest case to be collected must be offset by 1, since we've appended the reference genome in front
+  # The earliest case to be collected must be offset by 1, since we've appended the root genome in front
   if(!rooted){
     earliest <- earliest + 1
   }
@@ -281,7 +287,7 @@ initialize <- function(
   s <- as.numeric(difftime(s, s_max, units = 'days'))
 
   # Time of most recent common ancestor, before s_max
-  tmrca <- as.numeric(difftime(s_ref, s_max, units = 'days'))
+  tmrca <- as.numeric(difftime(s_root, s_max, units = 'days'))
 
 
 
@@ -301,7 +307,22 @@ initialize <- function(
   # Names of sequences
   names <- gsub("\\|.*", "", names(fasta))
 
-  # VCF files present
+  # Bookkeeping: move all VCF files into a vcf folder
+  vcfs <- list.files(paste0("./", indir), pattern = ".vcf")
+
+  if(length(vcfs) > 0){
+
+    if(!dir.exists(paste0("./", indir, "/vcf"))){
+      dir.create(paste0("./", indir, "/vcf"))
+    }
+
+    for (i in 1:length(vcfs)) {
+      file.rename(paste0("./", indir, "/", vcfs[i]), paste0("./", indir, "/vcf/", vcfs[i]))
+    }
+
+  }
+
+  # VCF files present in vcf folder
   vcfs <- list.files(paste0("./", indir, "/vcf"))
 
   ## List of SNVs present per sample
@@ -310,9 +331,11 @@ initialize <- function(
   pb = txtProgressBar(min = 0, max = n, initial = 0)
 
   vcf_present <- c()
+  messages <- character(0)
   for (i in 1:n) {
     # Locate the correct vcf file
     who <- which(grepl(names[i], vcfs))
+
     if(length(who) > 1){
       stop(paste0("Multiple VCF files found for sequence ", names[i], ": ", paste(vcfs[who], collapse =  ", "), "."))
     }
@@ -410,12 +433,33 @@ initialize <- function(
 
       }
 
-      snvs[[i]] <- genetic_info(names[i], ref_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
+      ## Filter out duplicated iSNV calls
+      isnvs <- paste0(vcf$V4, vcf$V2, vcf$V5)
+      dup <- duplicated(isnvs)
+
+
+      if(any(dup)){
+        # Get rid of duplicate iSNV calls
+        vcf <- vcf[!dup, ]
+
+        # Save a message
+
+        messages <- c(messages, paste0(
+          "In the VCF file for sequence ",
+          names[i],
+          " multiple entries were found for the following iSNV(s): ",
+          paste(isnvs[dup], collapse = ", "),
+          "."
+        ))
+
+      }
+
+      snvs[[i]] <- genetic_info(names[i], root_genome[[1]], fasta[[i]], filters = filters, vcf = vcf)
 
       # Even if the VCF has no lines, it's present, i.e. we observed no iSNVs
       vcf_present[i] <- TRUE
     }else{
-      snvs[[i]] <- genetic_info(names[i], ref_genome[[1]], fasta[[i]], filters = filters)
+      snvs[[i]] <- genetic_info(names[i], root_genome[[1]], fasta[[i]], filters = filters)
       vcf_present[i] <- FALSE
     }
     setTxtProgressBar(pb,i)
@@ -424,9 +468,16 @@ initialize <- function(
 
   close(pb)
 
+  if(length(messages) > 0){
+    for (m in messages) {
+      message(m)
+    }
+    message("Duplicated iSNV calls will be masked.")
+  }
+
   # Update missing positions in 1st sequence
   if(rooted){
-    snvs[[1]]$missing <- ref_missing
+    snvs[[1]]$missing <- root_missing
   }
 
   # Compile vectors of all positions with SNVs (may have duplicates) and all SNVs (unique)
@@ -511,9 +562,9 @@ initialize <- function(
         if(pos[p] %in% data$snvs[[i]]$isnv$pos){
           # Index of which isnv
           ind <- which(data$snvs[[i]]$isnv$pos == pos[p])
-          ref_allele <- raw_to_base(ref_genome[[1]][pos[p]])
-          # If either allele in the iSNV matches the ref genome (root), no consensus change in i
-          if(data$snvs[[i]]$isnv$a1[ind] == ref_allele | data$snvs[[i]]$isnv$a2[ind] == ref_allele){
+          root_allele <- raw_to_base(root_genome[[1]][pos[p]])
+          # If either allele in the iSNV matches the root genome (root), no consensus change in i
+          if(data$snvs[[i]]$isnv$a1[ind] == root_allele | data$snvs[[i]]$isnv$a2[ind] == root_allele){
             cons_change[p] <- FALSE
           }
         }
@@ -529,13 +580,13 @@ initialize <- function(
 
     if(length(isnv_pos) > 0){
       for (p in 1:length(isnv_pos)) {
-        ref_allele <- raw_to_base(ref_genome[[1]][isnv_pos[p]])
+        root_allele <- raw_to_base(root_genome[[1]][isnv_pos[p]])
 
-        if(data$snvs[[i]]$isnv$a1[p] == ref_allele){
-          # Does a1 match the ref allele? If so, a1 is in the bottleneck
+        if(data$snvs[[i]]$isnv$a1[p] == root_allele){
+          # Does a1 match the root allele? If so, a1 is in the bottleneck
           mcmc$bot[[i]][p] <- T
-        }else if(data$snvs[[i]]$isnv$a2[p] == ref_allele){
-          # Does a2 match the ref allele? If so, it's in the bottleneck
+        }else if(data$snvs[[i]]$isnv$a2[p] == root_allele){
+          # Does a2 match the root allele? If so, it's in the bottleneck
           mcmc$bot[[i]][p] <- F
         }else{
           # If neither, then whichever is the consensus allele is in the bottleneck

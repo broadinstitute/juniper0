@@ -207,7 +207,7 @@ move_w_t <- function(mcmc, data, recursive = F){
 move_pi <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$pi <- rnorm(1, mcmc$pi, 0.05)
+  prop$pi <- mcmc$pi * exp(rnorm(1, 0, 0.1))
   if(prop$pi <= 0 | prop$pi >= 1){
     return(mcmc)
   }else{
@@ -228,7 +228,7 @@ move_pi <- function(mcmc, data){
 ## Update mu
 move_mu <- function(mcmc, data){
   prop <- mcmc
-  prop$mu <- rnorm(1, mcmc$mu, data$init_mu / 10)
+  prop$mu <- mcmc$mu * exp(rnorm(1, 0, 0.1))
 
   if(prop$mu <= 0){
     return(mcmc)
@@ -244,7 +244,7 @@ move_mu <- function(mcmc, data){
 move_N_eff <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$N_eff <- rnorm(1, mcmc$N_eff, data$init_N_eff / 10)
+  prop$N_eff <- mcmc$N_eff * exp(rnorm(1, 0, 0.1))
 
   if(prop$N_eff <= 0){
     return(mcmc)
@@ -275,7 +275,7 @@ move_mu_N_eff <- function(mcmc, data){
 move_R <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$R <- rnorm(1, mcmc$R, 0.1)
+  prop$R <- mcmc$R * exp(rnorm(1, 0, 0.1))
   if(prop$R <= 0){
     return(mcmc)
   }
@@ -297,7 +297,7 @@ move_R <- function(mcmc, data){
 move_psi <- function(mcmc, data){
   # Proposal
   prop <- mcmc
-  prop$psi <- rnorm(1, mcmc$psi, 0.1)
+  prop$psi <- mcmc$psi * exp(rnorm(1, 0, 0.1))
 
   if(prop$psi < 0 | prop$psi > 1){
     return(mcmc)

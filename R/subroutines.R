@@ -125,29 +125,6 @@ genetic_info <- function(seq_name, seq1, seq2, filters, vcf = NULL){
       alts <- alt[rows]
       refs <- ref[rows]
 
-      # Sometimes, we see a repeated row
-      dup <- duplicated(alts)
-
-      if(any(dup)){
-
-        message(paste0(
-          "In the VCF file for sequence ",
-          seq_name,
-          " multiple entries were found for the following iSNVs: ",
-          paste(paste0(refs[dup], p, alts[dup]), collapse = ", "),
-          ". Duplicated iSNV calls will be masked."
-        ))
-
-        rows <- rows[!dup]
-        afs <- afs[!dup]
-        alts <- alts[!dup]
-        refs <- refs[!dup]
-
-
-
-      }
-
-
 
 
       props[match(alts, c("A", "C", "G", "T"))] <- afs

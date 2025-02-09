@@ -29,24 +29,27 @@ library(juniper0)
 
 After you have installed `juniper0`, ensure that the data are in the
 correct format and stored in the file structure that `juniper0`
-requires. The only *required* input is an aligned FASTA file which
-contains the names and dates of sequences to be reconstructed. It is
+requires. The only *required* inputs are a metadata table and aligned sequences (either as one combined file or with each genome in a separate file). It is
 *strongly recommended* that iSNV data in the form of Variant Call Format
-(VCF) files also be included when available. There is also optional
-functionality to include contact tracing data when available.
+(VCF) files also be included when available.
+
+### Metadata table
+
+The metadata table must contain a column named `sample` containing the 
+sequence names to be reconstructed and a column named `date` containing the 
+date of sample collection, in `YYYY-MM-DD` format. The names provided in the 
+`sample` column must be substrings the sequence names if using a single aligned FASTA, 
+or substrings of the file names if providing one FASTA per sequence. If VCF files are provided,
+the sequence names in the metadata table must be substrings of the corresponding VCF file names.
 
 ### Aligned FASTA
 
-The primary input that `juniper0` requires is a FASTA alignment of all
-the sequences you intend to reconstruct, **which must be named
-`aligned.fasta`**. It is critical that each of the sequences in this
-FASTA has been aligned to the same reference sequence and has been named
-as `>sequence_name|YYYY-MM-DD.` This date represents the date that will
-be used to reconstruct transmission between sequences; typically either
-the specimen collection date or the date of symptom onset, depending on
-the pathogen and availability of data.
+For consensus-level genomes, `juniper0` accepts either a single FASTA file which must be named `aligned.fasta`, or 
+one FASTA file per genome. As mentioned above, each sequence name in the metadata table must appear as either a 
+sequence name in `aligned.fasta` or as a file name for one of the per-individual FASTAs. It is critical that each of the sequences in this
+`aligned.fasta`, or each individual FASTA file, has been aligned to the same reference sequence.
 
-By default, this FASTA should be stored in a user-created directory
+By default, all files should be stored in a user-created directory
 named `input_data` which is inside of your current working directory in
 R. For instance the following R code would set the working directory and
 create a sub-folder with the required name for a Mac user with profile
@@ -65,12 +68,8 @@ however, to include this data whenever available. To include iSNV data
 in the reconstruction process, you must include a Variant Call Format
 (VCF) file per sequence.
 
-To run `juniper0` with iSNV data, create a sub-folder called `vcf`
-within the `input_data` folder. The `vcf` sub-folder should contain VCF
-files for any sequence included in `aligned.fasta` that you wish to
-reconstruct using iSNV data.
-
-The name of each file **must contain the name of the consensus sequence
+To run `juniper0` with iSNV data, place all available VCF files in the same directory as the metadata file and FASTA file(s).
+The name of each VCF file **must contain the name of the consensus sequence
 to which is corresponds**. As long as the sequence name (ex: `SEQ001a`)
 is fully present in the VCF name (even as a sub-string, ex:
 `cleaned_final_SEQ0001a_lofreq.vcf`) then `juniper0` will be able to
