@@ -266,3 +266,132 @@ double probTTree(NumericMatrix ttree, double rOff, double pOff, double pi,
     return sum(lsstatus) + accum;
   }
 }
+
+
+
+
+// Marginal PDF of frequencies of denovo iSNVs
+
+double dpropHelper(double x, double mu, bool LOG){
+  if(LOG){
+    return log(mu) - 2 * log(mu + x - mu*x);
+  }else{
+    return (mu/(mu + x - mu *x)) * (mu/(mu + x - mu *x));
+  }
+}
+
+
+// [[Rcpp::export]]
+std::vector<double> dprop(std::vector<double> x, double mu, bool LOG){
+  if(LOG){
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = dpropHelper(x[i], mu, true);
+    }
+    return out;
+  }else{
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = dpropHelper(x[i], mu, false);
+    }
+    return out;
+  }
+}
+
+double dpropBoundedHelper(double x, double N, double mu, bool LOG){
+  if(LOG){
+    return (log(
+      (mu + pow(1 - mu, N) * mu * pow(1 - x, N) * (-1 + mu * N * (-1 + x) - N * x))
+    ) -
+      2 * log(
+          (mu + x - mu * x)
+      ));
+  }else{
+    return (mu + pow(1 - mu, N) * mu * pow(1 - x, N) * (-1 + mu * N * (-1 + x) - N * x))/pow(mu + x - mu * x, 2);
+  }
+}
+
+
+// [[Rcpp::export]]
+std::vector<double> dprop_bounded(std::vector<double> x, std::vector<double> N, double mu, bool LOG){
+  if(LOG){
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = dpropBoundedHelper(x[i], N[i], mu, true);
+    }
+    return out;
+  }else{
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = dpropBoundedHelper(x[i], N[i], mu, false);
+    }
+    return out;
+  }
+}
+
+// [[Rcpp::export]]
+double ppropBoundedHelper(double x, double N, double mu){
+  return (-x + pow(1 - mu, N) * (mu * (-1 + pow(1 - x, N)) * (-1 + x) + x))/(mu * (-1 + x) - x);
+}
+
+
+// [[Rcpp::export]]
+std::vector<double> pprop_bounded(double x, std::vector<double> N, double mu){
+
+  std::vector<double> out(N.size());
+  for (int i=0; i < N.size(); ++i){
+    out[i] = ppropBoundedHelper(x, N[i], mu);
+  }
+  return out;
+
+}
+
+double ppropHelper(double x, double mu, bool LOG){
+  if(LOG){
+    return log(x) - log(mu + x - mu*x);
+  }else{
+    return x/(mu + x - mu * x);
+  }
+}
+
+// [[Rcpp::export]]
+std::vector<double> pprop(std::vector<double> x, double mu, bool LOG){
+  if(LOG){
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = ppropHelper(x[i], mu, true);
+    }
+    return out;
+  }else{
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = ppropHelper(x[i], mu, false);
+    }
+    return out;
+  }
+}
+
+double spropHelper(double x, double mu, bool LOG){
+  if(LOG){
+    return log(mu - mu * x) - log(mu + x - mu*x);
+  }else{
+    return (mu - mu * x)/(mu + x - mu * x);
+  }
+}
+
+// [[Rcpp::export]]
+std::vector<double> sprop(std::vector<double> x, double mu, bool LOG){
+  if(LOG){
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = spropHelper(x[i], mu, true);
+    }
+    return out;
+  }else{
+    std::vector<double> out(x.size());
+    for (int i=0; i < x.size(); ++i){
+      out[i] = spropHelper(x[i], mu, false);
+    }
+    return out;
+  }
+}

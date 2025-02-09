@@ -371,34 +371,40 @@ g_lik <- function(mcmc, data, i, js = NULL){
   ## Log likelihood contribution
 
   # For iSNVs observed in i that aren't accounted for on the global phylogeny, compute marginal probability of the denovo frequency
-  out <- out + sum(dprop(freq[local_alone], mcmc$mu / mcmc$N_eff, log = T) + log(1/3)) # Choice of "to" nucleotide is 1/3
+  out <- out + sum(dprop(freq[local_alone], mcmc$mu / mcmc$N_eff, LOG = T) + log(1/3)) # Choice of "to" nucleotide is 1/3
 
 
   # For iSNVs observed in i where the global phylogeny has a different mutation at the same site, must have arisen before the one on the phylo tree)
-  out <- out + sum(dprop_bounded(freq[local_same_site], trans_isnv_size[global_same_site], mcmc$mu / mcmc$N_eff, log = T) + log(1/3)) # Choice of "to" nucleotide is 1/3
+  if(length(local_same_site) > 0){
+    out <- out + sum(dprop_bounded(freq[local_same_site], trans_isnv_size[global_same_site], mcmc$mu / mcmc$N_eff, LOG = T) + log(1/3)) # Choice of "to" nucleotide is 1/3
+  }
 
 
   # For iSNVs observed in i that ARE accounted for on the global phylogeny, condition on when the first denovo SNV occurs (before/after the one on the phylo tree)
-  out <- out + sum(log(
-    dprop_bounded(freq[local_in_global], trans_isnv_size[global_in_local], mcmc$mu / mcmc$N_eff, log = F)/3 + # When there's an earlier emergence of this iSNV
-      dbeta(freq[local_in_global], 1, trans_isnv_size[global_in_local]) * pgeom(trans_isnv_size[global_in_local] - 1, mcmc$mu / mcmc$N_eff, lower.tail = F) # When there's not
-  ))
-
+  if(length(local_in_global) > 0){
+    out <- out + sum(log(
+      dprop_bounded(freq[local_in_global], trans_isnv_size[global_in_local], mcmc$mu / mcmc$N_eff, LOG = F)/3 + # When there's an earlier emergence of this iSNV
+        dbeta(freq[local_in_global], 1, trans_isnv_size[global_in_local]) * pgeom(trans_isnv_size[global_in_local] - 1, mcmc$mu / mcmc$N_eff, lower.tail = F) # When there's not
+    ))
+  }
 
   # For iSNVs UNobserved in i that ARE accounted for on the global phylogeny, again condition on when the first denovo SNV occurs
   #print(global_alone)
 
   # pbeta can cause errors when parameters too big
-  trans_isnv_size_stable <- trans_isnv_size[global_alone]
-  trans_isnv_size_stable[trans_isnv_size_stable > 1e100] <- Inf
+  if(length(global_alone) > 0){
+    trans_isnv_size_stable <- trans_isnv_size[global_alone]
+    trans_isnv_size_stable[trans_isnv_size_stable > 1e100] <- Inf
 
-  out <- out + sum(log(
-    pprop_bounded(data$filters$af, trans_isnv_size[global_alone], mcmc$mu / mcmc$N_eff, log = F) + # When there's an earlier emergence of this iSNV
-      pbeta(data$filters$af, 1, trans_isnv_size_stable) * pgeom(trans_isnv_size[global_alone] - 1, mcmc$mu / mcmc$N_eff, lower.tail = F) # When there's not
-  ))
+    out <- out + sum(log(
+      pprop_bounded(data$filters$af, trans_isnv_size[global_alone], mcmc$mu / mcmc$N_eff) + # When there's an earlier emergence of this iSNV
+        pbeta(data$filters$af, 1, trans_isnv_size_stable) * pgeom(trans_isnv_size[global_alone] - 1, mcmc$mu / mcmc$N_eff, lower.tail = F) # When there's not
+    ))
+  }
+
 
   # And finally, all other sites
-  out <- out + (data$n_bases - length(unique(c(isnv_pos, trans_isnv_pos))) - length(data$snvs[[i]]$missing)) * pprop(data$filters$af, mcmc$mu / mcmc$N_eff, log = T)
+  out <- out + (data$n_bases - length(unique(c(isnv_pos, trans_isnv_pos))) - length(data$snvs[[i]]$missing)) * pprop(data$filters$af, mcmc$mu / mcmc$N_eff, LOG = T)
 
   return(out)
 }

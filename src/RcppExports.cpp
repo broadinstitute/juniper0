@@ -86,6 +86,85 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// dprop
+std::vector<double> dprop(std::vector<double> x, double mu, bool LOG);
+RcppExport SEXP _juniper0_dprop(SEXP xSEXP, SEXP muSEXP, SEXP LOGSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<double> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< bool >::type LOG(LOGSEXP);
+    rcpp_result_gen = Rcpp::wrap(dprop(x, mu, LOG));
+    return rcpp_result_gen;
+END_RCPP
+}
+// dprop_bounded
+std::vector<double> dprop_bounded(std::vector<double> x, std::vector<double> N, double mu, bool LOG);
+RcppExport SEXP _juniper0_dprop_bounded(SEXP xSEXP, SEXP NSEXP, SEXP muSEXP, SEXP LOGSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<double> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< std::vector<double> >::type N(NSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< bool >::type LOG(LOGSEXP);
+    rcpp_result_gen = Rcpp::wrap(dprop_bounded(x, N, mu, LOG));
+    return rcpp_result_gen;
+END_RCPP
+}
+// ppropBoundedHelper
+double ppropBoundedHelper(double x, double N, double mu);
+RcppExport SEXP _juniper0_ppropBoundedHelper(SEXP xSEXP, SEXP NSEXP, SEXP muSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type N(NSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    rcpp_result_gen = Rcpp::wrap(ppropBoundedHelper(x, N, mu));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pprop_bounded
+std::vector<double> pprop_bounded(double x, std::vector<double> N, double mu);
+RcppExport SEXP _juniper0_pprop_bounded(SEXP xSEXP, SEXP NSEXP, SEXP muSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type x(xSEXP);
+    Rcpp::traits::input_parameter< std::vector<double> >::type N(NSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    rcpp_result_gen = Rcpp::wrap(pprop_bounded(x, N, mu));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pprop
+std::vector<double> pprop(std::vector<double> x, double mu, bool LOG);
+RcppExport SEXP _juniper0_pprop(SEXP xSEXP, SEXP muSEXP, SEXP LOGSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<double> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< bool >::type LOG(LOGSEXP);
+    rcpp_result_gen = Rcpp::wrap(pprop(x, mu, LOG));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sprop
+std::vector<double> sprop(std::vector<double> x, double mu, bool LOG);
+RcppExport SEXP _juniper0_sprop(SEXP xSEXP, SEXP muSEXP, SEXP LOGSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<double> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< bool >::type LOG(LOGSEXP);
+    rcpp_result_gen = Rcpp::wrap(sprop(x, mu, LOG));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_juniper0_log_sum_exp", (DL_FUNC) &_juniper0_log_sum_exp, 2},
@@ -93,6 +172,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_juniper0_log_sum_exp_vec", (DL_FUNC) &_juniper0_log_sum_exp_vec, 1},
     {"_juniper0_wbar", (DL_FUNC) &_juniper0_wbar, 10},
     {"_juniper0_probTTree", (DL_FUNC) &_juniper0_probTTree, 11},
+    {"_juniper0_dprop", (DL_FUNC) &_juniper0_dprop, 3},
+    {"_juniper0_dprop_bounded", (DL_FUNC) &_juniper0_dprop_bounded, 4},
+    {"_juniper0_ppropBoundedHelper", (DL_FUNC) &_juniper0_ppropBoundedHelper, 3},
+    {"_juniper0_pprop_bounded", (DL_FUNC) &_juniper0_pprop_bounded, 3},
+    {"_juniper0_pprop", (DL_FUNC) &_juniper0_pprop, 3},
+    {"_juniper0_sprop", (DL_FUNC) &_juniper0_sprop, 3},
     {NULL, NULL, 0}
 };
 

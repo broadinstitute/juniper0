@@ -21,3 +21,27 @@ probTTree <- function(ttree, rOff, pOff, pi, shGen, scGen, shSam, scSam, dateT, 
     .Call(`_juniper0_probTTree`, ttree, rOff, pOff, pi, shGen, scGen, shSam, scSam, dateT, wbar0, delta_t)
 }
 
+dprop <- function(x, mu, LOG) {
+    .Call(`_juniper0_dprop`, x, mu, LOG)
+}
+
+dprop_bounded <- function(x, N, mu, LOG) {
+    .Call(`_juniper0_dprop_bounded`, x, N, mu, LOG)
+}
+
+ppropBoundedHelper <- function(x, N, mu) {
+    .Call(`_juniper0_ppropBoundedHelper`, x, N, mu)
+}
+
+pprop_bounded <- function(x, N, mu) {
+    .Call(`_juniper0_pprop_bounded`, x, N, mu)
+}
+
+pprop <- function(x, mu, LOG) {
+    .Call(`_juniper0_pprop`, x, mu, LOG)
+}
+
+sprop <- function(x, mu, LOG) {
+    .Call(`_juniper0_sprop`, x, mu, LOG)
+}
+

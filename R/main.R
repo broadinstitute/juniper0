@@ -206,7 +206,6 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
       }
       #print(mcmc$h)
 
-      print(mcmc$e_lik)
     }
 
     if(logging){
