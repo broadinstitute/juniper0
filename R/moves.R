@@ -160,13 +160,13 @@ move_w_t <- function(mcmc, data, recursive = F){
     # Change in time of infection for is
     delta <- runif(1, min_delta, max_delta)
   }else{
-    # If delta negative, take its mean to be 1/10 of the total evolutionary time
-    delta <- rdelta(-mcmc$seq[[1]] / 10, max_delta)
+    # If delta negative, take its mean to be equal to max_delta/2
+    delta <- rdelta(max_delta/2, max_delta)
     # P(old to new): sample delta (non-symmetric here)
-    hastings <- hastings - ddelta(delta, -mcmc$seq[[1]] / 10, max_delta, log = TRUE)
-    # After move: mcmc$seq[[1]] increases by delta, max_delta decreases by delta
+    hastings <- hastings - ddelta(delta, max_delta/2, max_delta, log = TRUE)
+    # After move: max_delta decreases by delta
     # P(new to old):
-    hastings <- hastings + ddelta(-delta, -(mcmc$seq[[1]] + delta) / 10, max_delta - delta, log = TRUE)
+    hastings <- hastings + ddelta(-delta, (max_delta - delta)/2, max_delta - delta, log = TRUE)
   }
 
   # Make proposal
