@@ -1,8 +1,8 @@
 # JUNIPER
 
-Specht et al. 2025
+Specht et al. 2025, doi.org/10.1101/2025.03.02.25323192
 
-Preliminary Version of JUNIPER: Large-Scale Outbreak Reconstruction
+JUNIPER: Large-Scale Outbreak Reconstruction
 
 ## Installation
 
