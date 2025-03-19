@@ -111,8 +111,7 @@ init <- initialize(a_g = 26.9,
                    init_mu = 1.99e-4)
 ```
 
-See the documentation of `initialize()` for more details optional
-parameters.
+Run `?initialize` to see more details about optional parameters.
 
 ### Viewing the results
 
