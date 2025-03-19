@@ -123,3 +123,7 @@ res_summary <- summarize(results)
 res_summary
 ```
 
+## Troubleshooting
+
+Please report any bugs to the lead and corresponding author, Ivan Specht, at `ispecht@broadinstitute.org`.
+
