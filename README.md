@@ -24,6 +24,11 @@ attached to the current R script by running:
 install_github("broadinstitute/juniper0")
 library(juniper0)
 ```
+The typical installation time for the `juniper0` is under one minute. This does not include the installation time of dependencies (listed below).
+
+### Dependencies
+
+`juniper0` requires `igraph` (version >= 2.1.4), `ape` (version >= 5.8.1), `ggplot2` (version >= 3.5.1), `ggraph` (version >= 2.2.1), `extraDistr` (version >= 1.10.0), and `TransPhylo` (version >= 1.4.5) as dependencies.
 
 ## Assembling and formatting data
 
@@ -122,6 +127,10 @@ filters, you can view the summary of results by running the command:
 res_summary <- summarize(results)
 res_summary
 ```
+
+## Examples
+
+For detailed instructions on reproducing the JUNIPER runs in the manuscript, see the repository https://github.com/broadinstitute/juniper-analyses.
 
 ## Troubleshooting
 
