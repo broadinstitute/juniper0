@@ -17,8 +17,10 @@
 #' @param psi Second parameter of the negative-binomially distributed offspring distribution. Defaults to 0.5.
 #' @param init_mu Initial value of the mutation rate, in substitutions/site/day. May be fixed using fixed_mu = TRUE, or inferred otherwise. Defaults to 1e-6.
 #' @param fixed_mu If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at its initial value for the duration of the algorithm.
+#' @param upper_mu Upper bound on the mutation rate, in substitutions/site/day. Defaults to 1.
 #' @param init_N_eff The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).
 #' @param fixed_N_eff If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.
+#' @param upper_N_eff Upper bound on the growth rate of the within-host effective population size. Defaults to 100.
 #' @param init_R Initial value of the reproductive number. Defaults to 1.
 #' @param fixed_R If FALSE (the default), the reproductive number is estimated. If TRUE, the reproductive number is fixed at its initial value for the duration of the algorithm.
 #' @param init_pi Initial value of the sampling rate. Defaults to 0.5.
@@ -45,8 +47,10 @@ initialize <- function(
     psi = 0.5, # Second parameter in negative binomial offspring distribution. E[NBin(rho, psi)] = R => rho*(1-psi)/psi = R => rho = R*psi / (1-psi)
     init_mu = 2e-5,
     fixed_mu = FALSE, # Should mutation rate be fixed? Defaults to FALSE.
+    upper_mu = 1,
     init_N_eff = log(100), # Effective population size, within host
     fixed_N_eff = FALSE,
+    upper_N_eff = 100,
     init_R = 1,
     fixed_R = FALSE,
     init_pi = 0.5,
@@ -522,8 +526,10 @@ initialize <- function(
   data$rooted <- rooted
   data$init_mu <- init_mu
   data$fixed_mu <- fixed_mu
+  data$upper_mu <- upper_mu
   data$init_N_eff <- init_N_eff
   data$fixed_N_eff <- fixed_N_eff
+  data$upper_N_eff <- upper_N_eff
   data$init_R <- init_R
   data$fixed_R <- fixed_R
   data$init_pi <- init_pi

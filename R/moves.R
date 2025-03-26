@@ -230,7 +230,7 @@ move_mu <- function(mcmc, data){
   prop <- mcmc
   prop$mu <- mcmc$mu * exp(rnorm(1, 0, 0.1))
 
-  if(prop$mu <= 0){
+  if(prop$mu <= 0 | prop$mu > data$upper_mu){
     return(mcmc)
   }
 
@@ -246,7 +246,8 @@ move_N_eff <- function(mcmc, data){
   prop <- mcmc
   prop$N_eff <- mcmc$N_eff * exp(rnorm(1, 0, 0.1))
 
-  if(prop$N_eff <= 0){
+  # Setting upper bound of 100 on N_eff to avoid num
+  if(prop$N_eff <= 0 | prop$N_eff > data$upper_N_eff){
     return(mcmc)
   }
 
@@ -263,6 +264,10 @@ move_mu_N_eff <- function(mcmc, data){
   scale <- exp(rnorm(1, 0, 0.05))
   prop$mu <- mcmc$mu * scale
   prop$N_eff <- mcmc$N_eff * scale
+
+  if(prop$mu > data$upper_mu | prop$mu > data$upper_N_eff){
+    return(mcmc)
+  }
 
 
   update_e <- integer(0)

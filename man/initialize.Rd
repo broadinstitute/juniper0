@@ -21,8 +21,10 @@ initialize(
   psi = 0.5,
   init_mu = 2e-05,
   fixed_mu = FALSE,
+  upper_mu = 1,
   init_N_eff = log(100),
   fixed_N_eff = FALSE,
+  upper_N_eff = 100,
   init_R = 1,
   fixed_R = FALSE,
   init_pi = 0.5,
@@ -63,9 +65,13 @@ initialize(
 
 \item{fixed_mu}{If FALSE (the default), the mutation rate is estimated. If TRUE, the mutation rate is fixed at its initial value for the duration of the algorithm.}
 
+\item{upper_mu}{Upper bound on the mutation rate, in substitutions/site/day. Defaults to 1.}
+
 \item{init_N_eff}{The growth rate of the within-host effective population size. Specifically, at time t after inoculation, a host has exp(N_eff * t) virions in their body. Defaults to log(100).}
 
 \item{fixed_N_eff}{If FALSE (the default), the within-host population growth rate is estimated. If TRUE, the within-host population growth rate is fixed at its initial value for the duration of the algorithm.}
+
+\item{upper_N_eff}{Upper bound on the growth rate of the within-host effective population size. Defaults to 100.}
 
 \item{init_R}{Initial value of the reproductive number. Defaults to 1.}
 
