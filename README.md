@@ -24,7 +24,7 @@ attached to the current R script by running:
 install_github("broadinstitute/juniper0")
 library(juniper0)
 ```
-The typical installation time for the `juniper0` is under one minute. This does not include the installation time of dependencies (listed below).
+The typical installation time for the `juniper0` is under one minute. This does not include the installation time of dependencies (listed below). It has been tested on Mac OS and Linux.
 
 ### Dependencies
 
