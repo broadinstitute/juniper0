@@ -96,18 +96,6 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
       # Delete the temporary directory
       unlink("tmp", recursive=TRUE)
 
-      # ...or run using parallel package in R...
-      # all_res <- parallel::mclapply(
-      #   1:length(mcmcs),
-      #   function(i, mcmcs, datas){
-      #     local_mcmc(mcmcs[[i]], datas[[i]])
-      #   },
-      #   mcmcs = mcmcs,
-      #   datas = datas,
-      #   mc.set.seed = F,
-      #   mc.cores = length(mcmcs)
-      # )
-
     }else{
 
       #...or run in series
