@@ -62,6 +62,13 @@ run_mcmc <- function(init, noisy = F, plotting = F, logging = F){
     # Parallelize or not
     if(length(mcmcs) > 1){
       ## Foolproof parallelization: write each element of mcmcs to its own .RData file, then run in parallel
+
+      # If directory already exists, delete it
+      if(dir.exists("tmp")){
+        unlink("tmp", recursive=TRUE)
+      }
+
+      # Create temporary directory
       dir.create("tmp")
 
       for (j in 1:length(mcmcs)) {
